@@ -1,4 +1,4 @@
-# Space Manager V2.1.3
+# Space Manager V2.1.4
 
 **OpenClaw Agent Workspace** 文件管理 + 自动清理 + LLM 判断系统
 
@@ -42,7 +42,7 @@
 
 ---
 
-> 🛡️ **V2.1.3（Strict Safe Edition Patch）**：修复 V2.1 中 7 个未完全解决的问题：
+> 🛡️ **V2.1.4（Performance Optimized Edition）**：性能优化 + 安全增强 + 测试覆盖：
 > - **0字节文件直接删除** → 强制移入 `.trash/`，禁止直接删除
 > - **索引一致性检查不完整** → 递归扫描文件系统，全面对比索引
 > - **引用检查框架未实现** → 添加文件内容引用扫描（基础实现）
@@ -530,7 +530,7 @@ node runtime/main.js /path/to/workspace cleanup --force
 
 ```json
 {
-  "version": "2.0",
+  "version": "2.1.4",
   "last_updated": "2024-01-15T10:30:00Z",
   "files": [
     {

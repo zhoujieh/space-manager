@@ -47,6 +47,19 @@ node runtime/main.js /path/to/workspace classify /temp/test.log
 
 ## 📦 版本
 
+### V2.1.4 - 性能优化与测试增强 (2026-04-19)
+**性能优化：**
+1. **LLM批处理与缓存** - 10文件/批，90% API调用减少，LRU缓存1000条目
+2. **索引一致性检查优化** - 符号链接lstatSync检测，Set数据结构O(1)查找
+3. **引用检查正则增强** - 支持ES6动态import()、require.resolve()、Python from...import等15+模式
+4. **大工作区支持** - 默认扫描限制10000文件，可配置max_index_scan_files
+5. **集成测试套件** - 新增20+集成测试，总计30+测试覆盖
+6. **单元测试覆盖** - 新增12个引用检查单元测试
+
+**配置更新：**
+- `skill.json`: 版本2.1.4，新增`max_index_scan_files: 10000`
+- 文档同步：所有文档版本更新至V2.1.4
+
 ### V2.1.3 - 补充记忆文件保护 (2026-04-19)
 **关键修复：**
 1. **HEARTBEAT关键词保护** - 添加 HEARTBEAT.md 到豁免关键词列表

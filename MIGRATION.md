@@ -70,7 +70,7 @@ Comprehensive test coverage for all major functionality.
 ### Upgrade Steps
 
 1. **Backup**: Ensure your workspace is backed up before upgrading
-2. **Update Files**: Replace all runtime files with V2.1.3 versions
+2. **Update Files**: Replace all runtime files with V2.1.4 versions
 3. **Test**: Run the integration tests to verify functionality:
    ```bash
    node test/integration.test.js
