@@ -118,6 +118,6 @@ print(f"Target path: {result['target_path']}")
 
 ---
 
-**版本**：V2.1.1 (Strict Safe Edition)  
+**版本**：V2.1.3 (Strict Safe Edition)  
 **最后更新**：2026-04-19  
 **对应分类器版本**：classifier.js (priority-based rules)
