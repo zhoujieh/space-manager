@@ -39,6 +39,6 @@
     "protected_age_hours": 24,
     "low_importance_days": 7,
     "unused_days": 90,
-    "llm_decision_threshold": 0.3
+    "llm_decision_threshold": 0.7
   }
 }

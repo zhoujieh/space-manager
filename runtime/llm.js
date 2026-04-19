@@ -10,7 +10,93 @@ class LLM {
   constructor(manager) {
     this.manager = manager;
     this.decisionHistory = [];
-    this.confidenceThreshold = 0.6;
+    this.confidenceThreshold = 0.7;
+    
+    // 缓存系统
+    this.cache = new Map();
+    this.cacheMaxSize = 1000;
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
+    
+    // 批处理配置
+    this.batchSize = 10;
+    this.batchDelay = 100; // ms
+  }
+
+  /**
+   * 生成缓存键
+   * @private
+   */
+  _generateCacheKey(filePath, metadata, contentSummary) {
+    const crypto = require('crypto');
+    // 稳定的缓存键：忽略时间戳等可变字段
+    const keyData = JSON.stringify({
+      path: filePath,
+      size: metadata.size || 0,
+      type: metadata.type || 'unknown',
+      // 不包含时间戳，因为它们可能变化
+      contentHash: contentSummary ? crypto.createHash('md5').update(contentSummary.substring(0, 200)).digest('hex') : ''
+    });
+    return crypto.createHash('md5').update(keyData).digest('hex');
+  }
+
+  /**
+   * 从缓存获取决策
+   * @private
+   */
+  _getFromCache(cacheKey) {
+    if (this.cache.has(cacheKey)) {
+      const entry = this.cache.get(cacheKey);
+      // 检查缓存是否过期（24小时）
+      if (Date.now() - entry.timestamp < 24 * 60 * 60 * 1000) {
+        this.cacheHits++;
+        return entry.decision;
+      }
+      // 过期，删除
+      this.cache.delete(cacheKey);
+    }
+    this.cacheMisses++;
+    return null;
+  }
+
+  /**
+   * 保存决策到缓存
+   * @private
+   */
+  _saveToCache(cacheKey, decision) {
+    // LRU：如果缓存满了，删除最旧的条目
+    if (this.cache.size >= this.cacheMaxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    
+    this.cache.set(cacheKey, {
+      decision: { ...decision },
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * 获取缓存统计
+   */
+  getCacheStats() {
+    const total = this.cacheHits + this.cacheMisses;
+    return {
+      size: this.cache.size,
+      maxSize: this.cacheMaxSize,
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
+      hitRate: total > 0 ? (this.cacheHits / total).toFixed(2) : 0
+    };
+  }
+
+  /**
+   * 清空缓存
+   */
+  clearCache() {
+    this.cache.clear();
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
   }
 
   /**
@@ -18,8 +104,31 @@ class LLM {
    * @param {string} filePath - 文件路径
    * @param {object} metadata - 文件元数据
    * @param {string} contentSummary - 文件内容摘要
+   * @param {object} options - 选项
+   * @param {boolean} options.useCache - 是否使用缓存（默认true）
    */
-  async decide(filePath, metadata = {}, contentSummary = '') {
+  async decide(filePath, metadata = {}, contentSummary = '', options = {}) {
+    const useCache = options.useCache !== false;
+    
+    // 尝试从缓存获取
+    if (useCache) {
+      const cacheKey = this._generateCacheKey(filePath, metadata, contentSummary);
+      const cachedDecision = this._getFromCache(cacheKey);
+      if (cachedDecision) {
+        // 记录决策历史（标记为缓存命中）
+        this.decisionHistory.push({
+          timestamp: new Date().toISOString(),
+          path: filePath,
+          decision: cachedDecision.decision,
+          reason: cachedDecision.reason + ' (cached)',
+          confidence: cachedDecision.confidence,
+          cached: true
+        });
+        // 返回带缓存标记的决策副本
+        return { ...cachedDecision, cached: true };
+      }
+    }
+
     // 构建决策上下文
     const context = this.buildContext(filePath, metadata, contentSummary);
 
@@ -27,16 +136,24 @@ class LLM {
     // 这里先用规则模拟 LLM 决策
     const decision = this.simulateDecision(context);
 
+    // 保存到缓存
+    if (useCache) {
+      const cacheKey = this._generateCacheKey(filePath, metadata, contentSummary);
+      this._saveToCache(cacheKey, decision);
+    }
+
     // 记录决策历史
     this.decisionHistory.push({
       timestamp: new Date().toISOString(),
       path: filePath,
       decision: decision.decision,
       reason: decision.reason,
-      confidence: decision.confidence
+      confidence: decision.confidence,
+      cached: false
     });
 
-    return decision;
+    // 返回带缓存标记的决策
+    return { ...decision, cached: false };
   }
 
   /**
@@ -252,21 +369,82 @@ class LLM {
   }
 
   /**
-   * 批量判断
+   * 批量判断（优化版：支持批处理和缓存）
    * @param {array} files - 文件列表
+   * @param {object} options - 选项
+   * @param {number} options.batchSize - 批处理大小（默认10）
+   * @param {boolean} options.useCache - 是否使用缓存（默认true）
    */
-  async decideBatch(files) {
+  async decideBatch(files, options = {}) {
+    const batchSize = options.batchSize || this.batchSize;
+    const useCache = options.useCache !== false;
     const results = [];
+    
+    // 统计信息
+    const stats = {
+      total: files.length,
+      processed: 0,
+      cached: 0,
+      batched: 0,
+      apiCalls: 0
+    };
 
-    for (const file of files) {
-      const decision = await this.decide(file.path, file.metadata, file.contentSummary);
-      results.push({
-        ...file,
-        ...decision
-      });
+    // 分批处理
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      const batchResults = [];
+      
+      // 处理批次中的每个文件
+      for (const file of batch) {
+        // 检查缓存
+        let decision;
+        let fromCache = false;
+        
+        if (useCache) {
+          const cacheKey = this._generateCacheKey(file.path, file.metadata, file.contentSummary);
+          const cached = this._getFromCache(cacheKey);
+          if (cached) {
+            decision = cached;
+            fromCache = true;
+            stats.cached++;
+          }
+        }
+        
+        // 缓存未命中，调用decide
+        if (!decision) {
+          decision = await this.decide(file.path, file.metadata, file.contentSummary, { useCache: false });
+          stats.apiCalls++;
+          
+          // 保存到缓存
+          if (useCache) {
+            const cacheKey = this._generateCacheKey(file.path, file.metadata, file.contentSummary);
+            this._saveToCache(cacheKey, decision);
+          }
+        }
+        
+        batchResults.push({
+          ...file,
+          ...decision,
+          _fromCache: fromCache
+        });
+      }
+      
+      results.push(...batchResults);
+      stats.processed += batch.length;
+      stats.batched++;
+      
+      // 批次间延迟，避免限流
+      if (i + batchSize < files.length) {
+        await new Promise(resolve => setTimeout(resolve, this.batchDelay));
+      }
     }
-
-    return results;
+    
+    console.log(`[LLM] 批处理完成: ${stats.total} 个文件, ${stats.batched} 批次, ${stats.cached} 缓存命中, ${stats.apiCalls} 次API调用`);
+    
+    return {
+      results,
+      stats
+    };
   }
 
   /**

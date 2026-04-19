@@ -129,8 +129,8 @@
     "suggested_importance": "high|normal|low"
   }
   ```
-- ✅ `confidence < 0.6` → 建议人工确认
-- ✅ `confidence >= 0.6` → 可自动执行
+- ✅ `confidence < 0.7` → 建议人工确认
+- ✅ `confidence >= 0.7` → 可自动执行
 - ✅ **禁止**LLM直接删除大文件（>1MB），必须先下载分析
 
 ### 10. 边界情况处理
@@ -388,7 +388,7 @@ workspace/
   "llmDecisionThreshold": 0.6,
   "maxFileSizeForLLM": 1048576,
   "indexFile": "/system/space_index.json",
-  "logFile": "/.trash/cleanup_log.json"
+  "logFile": "/system/cleanup_log.json"
 }
 ```
 

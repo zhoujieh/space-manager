@@ -15,10 +15,11 @@ class SpaceManager {
     this.workspacePath = workspacePath;
     this.config = {
       trashPath: '/.trash',
-      protectedPaths: ['/system', '/.trash'],
+      protectedPaths: ['/core', '/system', '/.trash', '/skills'],
       protectedAgeHours: 24,
       lowImportanceDays: 7,
       unusedDays: 90,
+      llmDecisionThreshold: 0.7,
       ...config
     };
 
@@ -244,20 +245,28 @@ Don't ask permission. Just do it.`;
    * @param {string} decisionBy - 决策来源
    */
   async moveToTrash(filePath, reason, decisionBy = 'rule') {
-    const fullPath = path.join(this.workspacePath, filePath);
+    // 确保文件路径不以/开头（path.join会忽略workspacePath）
+    const normalizedPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+    const fullPath = path.join(this.workspacePath, normalizedPath);
     const trashPath = path.join(this.workspacePath, this.config.trashPath);
 
     if (!fs.existsSync(fullPath)) {
       return {
         success: false,
-        error: 'File not found'
+        error: `File not found: ${fullPath} (original: ${filePath})`
       };
     }
 
-    // 生成回收站文件名
+    // 生成回收站文件名（包含Base64编码的原始路径）
     const timestamp = Date.now();
     const basename = path.basename(filePath);
-    const trashFileName = `${basename}_${timestamp}`;
+    // 使用URL安全的Base64编码，避免特殊字符
+    // 编码原始路径（带/前缀）
+    const encodedPath = Buffer.from(filePath).toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+    const trashFileName = `${basename}_${timestamp}_${encodedPath}`;
     const trashFilePath = path.join(trashPath, trashFileName);
 
     // 确保回收站存在
@@ -330,27 +339,54 @@ Don't ask permission. Just do it.`;
   async restoreFromTrash(trashFileName, targetPath = null) {
     const trashPath = path.join(this.workspacePath, this.config.trashPath);
     const trashFilePath = path.join(trashPath, trashFileName);
-    
+
     if (!fs.existsSync(trashFilePath)) {
       return {
         success: false,
         error: '回收站文件不存在'
       };
     }
-    
-    // 从文件名解析原始文件名（移除时间戳）
-    const match = trashFileName.match(/^(.+)_(\d+)$/);
-    if (!match) {
-      return {
-        success: false,
-        error: '无效的回收站文件名格式'
-      };
+
+    let originalPath = targetPath;
+
+    // 如果没有提供目标路径，尝试从文件名解析
+    if (!originalPath) {
+      // 新格式：basename_timestamp_encodedPath
+      const match = trashFileName.match(/^(.+)_(\d+)_(.+)$/);
+      if (match) {
+        try {
+          // URL安全Base64解码：将-和_还原为+和/
+          let encodedPath = match[3]
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+          // 添加padding（Base64需要4的倍数长度）
+          while (encodedPath.length % 4) {
+            encodedPath += '=';
+          }
+          originalPath = Buffer.from(encodedPath, 'base64').toString('utf8');
+        } catch (e) {
+          console.warn(`[Restore] 无法解析编码路径，使用旧格式回退: ${e.message}`);
+          originalPath = null;
+        }
+      }
+
+      // 旧格式回退：basename_timestamp
+      if (!originalPath) {
+        const oldMatch = trashFileName.match(/^(.+)_(\d+)$/);
+        if (oldMatch) {
+          originalPath = `/${oldMatch[1]}`;
+        } else {
+          return {
+            success: false,
+            error: '无效的回收站文件名格式'
+          };
+        }
+      }
     }
     
-    const originalBasename = match[1];
-    const originalPath = targetPath || `/${originalBasename}`; // 简化：假设原路径在根目录
-    
-    const targetFullPath = path.join(this.workspacePath, originalPath);
+    // 确保路径不以/开头
+    const normalizedPath = originalPath.startsWith('/') ? originalPath.substring(1) : originalPath;
+    const targetFullPath = path.join(this.workspacePath, normalizedPath);
     
     // 确保目标目录存在
     const targetDir = path.dirname(targetFullPath);
@@ -371,10 +407,19 @@ Don't ask permission. Just do it.`;
       fs.renameSync(trashFilePath, targetFullPath);
       
       // 更新索引
-      await this.index.add(originalPath, {
-        source: 'restore',
-        restored_at: new Date().toISOString()
-      });
+      try {
+        const stats = fs.statSync(targetFullPath);
+        await this.index.addOrUpdate({
+          path: normalizedPath,
+          size: stats.size,
+          type: 'file',
+          source: 'restore',
+          restored_at: new Date().toISOString()
+        });
+      } catch (indexError) {
+        console.warn(`[Restore] 索引更新失败: ${indexError.message}`);
+        // 继续执行，索引更新不是关键操作
+      }
       
       // 记录恢复日志
       await this.logCleanup({

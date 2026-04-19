@@ -219,10 +219,15 @@ class Cleanup {
 
   /**
    * 检查是否为保护路径
+   * @param {string} filePath - 文件路径
+   * @returns {boolean} true表示受保护
    */
   isProtectedPath(filePath) {
     for (const protectedPath of this.config.protectedPaths) {
-      if (filePath.startsWith(protectedPath)) {
+      // 精确匹配或目录前缀匹配（避免 /coredata 匹配 /core）
+      if (filePath === protectedPath ||
+          filePath.startsWith(protectedPath + '/') ||
+          filePath.startsWith(protectedPath + '\\')) {
         return true;
       }
     }
@@ -252,39 +257,63 @@ class Cleanup {
 
   /**
    * 检查node_modules保护条件（必须全部满足才允许清理）
+   * @param {string} filePath - 文件路径
+   * @returns {boolean} true表示允许清理，false表示保护
    */
   checkNodeModulesConditions(filePath) {
     const fs = require('fs');
     const path = require('path');
     const workspacePath = this.manager.workspacePath;
-    
-    // 1. 路径必须在workspace根目录
-    const fullPath = path.join(workspacePath, filePath);
-    const workspaceRoot = path.dirname(fullPath);
-    if (workspaceRoot !== workspacePath) {
-      return false; // 不在根目录，不允许清理
+
+    // 获取完整路径
+    const fullPath = path.join(workspacePath, filePath.startsWith('/') ? filePath.substring(1) : filePath);
+
+    // 1. 检查路径是否包含node_modules
+    if (!fullPath.includes('node_modules')) {
+      return true; // 不是node_modules路径，不需要保护检查
     }
-    
-    // 2. 同级是否存在package.json
-    const parentDir = path.dirname(fullPath);
-    const packageJsonPath = path.join(parentDir, 'package.json');
-    if (fs.existsSync(packageJsonPath)) {
-      return false; // 存在package.json，不允许清理
-    }
-    
-    // 3. 是否存在lock文件
-    const lockFiles = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
-    for (const lockFile of lockFiles) {
-      const lockFilePath = path.join(parentDir, lockFile);
-      if (fs.existsSync(lockFilePath)) {
-        return false; // 存在lock文件，不允许清理
+
+    // 2. 向上遍历查找package.json和lock文件
+    let currentDir = fullPath;
+
+    // 如果是文件，从父目录开始
+    try {
+      const stat = fs.lstatSync(fullPath);
+      if (stat.isFile() || stat.isSymbolicLink()) {
+        currentDir = path.dirname(fullPath);
+      } else if (stat.isDirectory()) {
+        currentDir = fullPath;
       }
+    } catch (e) {
+      return false; // 无法访问，保守起见保护
     }
-    
-    // 4. 检查是否被引用（需要索引支持）
-    // TODO: 实现引用检查
-    // 暂时返回true，假设未被引用
-    
+
+    // 向上遍历目录树，直到workspace根目录
+    while (currentDir && currentDir.startsWith(workspacePath)) {
+      // 检查当前目录是否有package.json
+      const packageJsonPath = path.join(currentDir, 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        return false; // 存在package.json，保护此node_modules
+      }
+
+      // 检查lock文件
+      const lockFiles = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
+      for (const lockFile of lockFiles) {
+        const lockFilePath = path.join(currentDir, lockFile);
+        if (fs.existsSync(lockFilePath)) {
+          return false; // 存在lock文件，保护此node_modules
+        }
+      }
+
+      // 向上移动到父目录
+      const parentDir = path.dirname(currentDir);
+      if (parentDir === currentDir || parentDir.length < workspacePath.length) {
+        break; // 到达根目录或超出workspace
+      }
+      currentDir = parentDir;
+    }
+
+    // 没有找到package.json或lock文件，允许清理
     return true;
   }
 
@@ -393,8 +422,9 @@ class Cleanup {
         const updated = new Date(file.updated_at);
         const now = new Date();
         
-        // 检查日期逻辑：创建时间 <= 更新时间 <= 最后使用时间 <= 当前时间
-        if (created <= updated && updated <= lastUsed && lastUsed <= now) {
+        // 检查日期逻辑：创建时间 <= 当前时间 && 更新时间 <= 当前时间 && 最后使用时间 <= 当前时间 && 创建时间 <= 更新时间
+        // 修复：不再要求 updated <= lastUsed（文件更新后可能未被使用）
+        if (created <= now && updated <= now && lastUsed <= now && created <= updated) {
           // 检查字段完整性
           if (file.size !== undefined && file.type && file.importance) {
             return true;

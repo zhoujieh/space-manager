@@ -256,11 +256,18 @@ class Index {
   /**
    * 扫描文件系统获取所有文件（排除特定目录）
    * @private
+   * @param {string} rootPath - 根路径
+   * @param {object} options - 选项
+   * @param {number} options.maxFiles - 最大扫描文件数（默认10000）
+   * @param {boolean} options.followSymlinks - 是否跟随符号链接（默认false）
    */
-  _scanFileSystem(rootPath) {
+  _scanFileSystem(rootPath, options = {}) {
     const fs = require('fs');
     const path = require('path');
     const result = [];
+    const maxFiles = options.maxFiles || 10000;
+    const followSymlinks = options.followSymlinks || false;
+    let scannedCount = 0;
     
     // 排除目录：.trash, .git, node_modules, __pycache__, 以及隐藏目录
     const excludeDirs = [
@@ -268,15 +275,60 @@ class Index {
       '.DS_Store', 'Thumbs.db', '.openclaw', '.qclaw'
     ];
     
+    // 已访问路径集合（防止符号链接循环）
+    const visitedPaths = new Set();
+    
     function walk(currentPath, relativeBase = '') {
       if (!fs.existsSync(currentPath)) return;
+      
+      // 检查最大扫描限制
+      if (result.length >= maxFiles) {
+        console.warn(`[Index] 达到最大扫描限制 (${maxFiles})，停止扫描`);
+        return;
+      }
+      
+      // 检查符号链接
+      if (!followSymlinks) {
+        try {
+          const lstat = fs.lstatSync(currentPath);
+          if (lstat.isSymbolicLink()) {
+            return; // 跳过符号链接
+          }
+        } catch (e) {
+          return; // 无法获取状态，跳过
+        }
+      }
+      
+      // 防止循环（符号链接）
+      const realPath = fs.realpathSync(currentPath);
+      if (visitedPaths.has(realPath)) {
+        return;
+      }
+      visitedPaths.add(realPath);
       
       const items = fs.readdirSync(currentPath);
       
       for (const item of items) {
+        // 检查最大扫描限制
+        if (result.length >= maxFiles) {
+          return;
+        }
+        
         const fullPath = path.join(currentPath, item);
         const relativePath = relativeBase ? path.join(relativeBase, item) : item;
-        const stat = fs.statSync(fullPath);
+        
+        // 获取文件状态（使用lstat检测符号链接）
+        let stat;
+        try {
+          stat = fs.lstatSync(fullPath);
+        } catch (e) {
+          continue; // 跳过无法访问的文件
+        }
+        
+        // 跳过符号链接（如果不跟随）
+        if (!followSymlinks && stat.isSymbolicLink()) {
+          continue;
+        }
         
         // 跳过排除目录
         if (excludeDirs.includes(item) || item.startsWith('.')) {
@@ -288,6 +340,7 @@ class Index {
           walk(fullPath, relativePath);
         } else {
           // 记录文件
+          scannedCount++;
           result.push({
             path: '/' + relativePath, // 索引中使用/开头的路径
             size: stat.size,
@@ -298,61 +351,85 @@ class Index {
     }
     
     walk(rootPath);
+    
+    // 记录扫描统计
+    if (result.length >= maxFiles) {
+      console.warn(`[Index] 扫描完成：已扫描 ${scannedCount} 个文件，返回前 ${maxFiles} 个（达到限制）`);
+    }
+    
     return result;
   }
 
   /**
    * 检查索引与文件系统的一致性（V2.1新增）
+   * @param {object} options - 选项
+   * @param {number} options.maxScanFiles - 最大扫描文件数（默认10000）
    * @returns {object} 一致性检查结果
    */
-  async checkConsistency() {
+  async checkConsistency(options = {}) {
     const index = this.readIndex();
     const workspacePath = this.manager.workspacePath;
     const fs = require('fs');
     const path = require('path');
+    const maxScanFiles = options.maxScanFiles || 10000;
     
     const missingInFs = []; // 索引中有但文件系统中不存在
     const missingInIndex = []; // 文件系统中存在但索引中没有
     const mismatchedSize = []; // 大小不匹配
+    const errors = []; // 错误记录
     
-    // 第一步：扫描文件系统获取所有文件（排除特定目录）
-    const allFilesInFs = this._scanFileSystem(workspacePath);
+    // 第一步：扫描文件系统获取所有文件（排除特定目录，限制数量）
+    const scanStartTime = Date.now();
+    const allFilesInFs = this._scanFileSystem(workspacePath, { maxFiles: maxScanFiles });
+    const scanDuration = Date.now() - scanStartTime;
+    
+    // 使用Set优化查找性能 O(n) -> O(1)
+    const fsPathSet = new Set(allFilesInFs.map(f => f.path));
+    const fsSizeMap = new Map(allFilesInFs.map(f => [f.path, f.size]));
     
     // 第二步：检查索引中的每个文件
+    const checkStartTime = Date.now();
     for (const file of index.files) {
-      const fullPath = path.join(workspacePath, file.path.startsWith('/') ? file.path.substring(1) : file.path);
-      
-      if (!fs.existsSync(fullPath)) {
-        missingInFs.push({
-          path: file.path,
-          reason: '文件系统中不存在'
-        });
-      } else {
-        // 检查大小是否匹配
-        const stats = fs.statSync(fullPath);
-        if (file.size !== undefined && file.size !== stats.size) {
-          mismatchedSize.push({
-            path: file.path,
-            index_size: file.size,
-            fs_size: stats.size,
-            diff: Math.abs(file.size - stats.size)
-          });
-        }
+      try {
+        const fullPath = path.join(workspacePath, file.path.startsWith('/') ? file.path.substring(1) : file.path);
         
-        // 从扫描结果中移除（标记为已在索引中）
-        const indexInFs = allFilesInFs.findIndex(f => f.path === file.path);
-        if (indexInFs !== -1) {
-          allFilesInFs.splice(indexInFs, 1);
+        if (!fs.existsSync(fullPath)) {
+          missingInFs.push({
+            path: file.path,
+            reason: '文件系统中不存在'
+          });
+        } else {
+          // 检查大小是否匹配
+          const stats = fs.statSync(fullPath);
+          if (file.size !== undefined && file.size !== stats.size) {
+            mismatchedSize.push({
+              path: file.path,
+              index_size: file.size,
+              fs_size: stats.size,
+              diff: Math.abs(file.size - stats.size)
+            });
+          }
+          
+          // 从Set中移除（标记为已在索引中）
+          fsPathSet.delete(file.path);
         }
+      } catch (err) {
+        errors.push({
+          path: file.path,
+          error: err.message
+        });
       }
     }
+    const checkDuration = Date.now() - checkStartTime;
     
-    // 第三步：剩余在allFilesInFs中的文件就是索引中缺失的
-    missingInIndex.push(...allFilesInFs.map(file => ({
-      path: file.path,
-      reason: '未在索引中',
-      size: file.size
-    })));
+    // 第三步：剩余在Set中的文件就是索引中缺失的
+    for (const path of fsPathSet) {
+      missingInIndex.push({
+        path: path,
+        reason: '未在索引中',
+        size: fsSizeMap.get(path)
+      });
+    }
     
     // 标记索引为dirty（如果发现不一致）
     const hasInconsistencies = missingInFs.length > 0 || missingInIndex.length > 0 || mismatchedSize.length > 0;
@@ -370,7 +447,15 @@ class Index {
       missing_in_index: missingInIndex,
       mismatched_size: mismatchedSize,
       total_indexed: index.files.length,
-      total_in_fs: allFilesInFs.length + index.files.length - missingInFs.length
+      total_in_fs: allFilesInFs.length + index.files.length - missingInFs.length,
+      performance: {
+        scan_duration_ms: scanDuration,
+        check_duration_ms: checkDuration,
+        total_duration_ms: scanDuration + checkDuration,
+        max_scan_files: maxScanFiles,
+        scanned_files: allFilesInFs.length
+      },
+      errors: errors.length > 0 ? errors : undefined
     };
   }
 
