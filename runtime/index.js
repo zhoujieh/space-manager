@@ -387,20 +387,50 @@ class Index {
     const fsPathSet = new Set(allFilesInFs.map(f => f.path));
     const fsSizeMap = new Map(allFilesInFs.map(f => [f.path, f.size]));
     
-    // 第二步：检查索引中的每个文件
+    // 第二步：检查索引中的每个文件（使用lstatSync优化符号链接检测）
     const checkStartTime = Date.now();
     for (const file of index.files) {
       try {
         const fullPath = path.join(workspacePath, file.path.startsWith('/') ? file.path.substring(1) : file.path);
         
-        if (!fs.existsSync(fullPath)) {
+        let stats;
+        try {
+          stats = fs.lstatSync(fullPath);
+        } catch (err) {
+          // 文件不存在或无法访问
           missingInFs.push({
             path: file.path,
-            reason: '文件系统中不存在'
+            reason: `文件系统中不存在: ${err.message}`
           });
+          continue;
+        }
+        
+        // 处理符号链接：检查链接目标是否存在
+        if (stats.isSymbolicLink()) {
+          try {
+            const targetPath = fs.realpathSync(fullPath);
+            const targetStats = fs.statSync(targetPath);
+            // 对于符号链接，我们检查链接目标的大小
+            if (file.size !== undefined && file.size !== targetStats.size) {
+              mismatchedSize.push({
+                path: file.path,
+                index_size: file.size,
+                fs_size: targetStats.size,
+                diff: Math.abs(file.size - targetStats.size),
+                note: '符号链接目标大小不匹配'
+              });
+            }
+          } catch (targetErr) {
+            // 符号链接目标无法访问
+            missingInFs.push({
+              path: file.path,
+              reason: `符号链接目标无法访问: ${targetErr.message}`,
+              is_symbolic_link: true
+            });
+            continue;
+          }
         } else {
-          // 检查大小是否匹配
-          const stats = fs.statSync(fullPath);
+          // 普通文件：检查大小是否匹配
           if (file.size !== undefined && file.size !== stats.size) {
             mismatchedSize.push({
               path: file.path,
@@ -409,10 +439,10 @@ class Index {
               diff: Math.abs(file.size - stats.size)
             });
           }
-          
-          // 从Set中移除（标记为已在索引中）
-          fsPathSet.delete(file.path);
         }
+        
+        // 从Set中移除（标记为已在索引中）
+        fsPathSet.delete(file.path);
       } catch (err) {
         errors.push({
           path: file.path,
