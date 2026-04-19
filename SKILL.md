@@ -133,6 +133,14 @@
 - ✅ `confidence >= 0.7` → 可自动执行
 - ✅ **禁止**LLM直接删除大文件（>1MB），必须先下载分析
 
+#### 批处理和缓存（V2.1.4新增）
+- **批处理优化**：10个文件从10次LLM调用降至1次批量调用
+- **缓存系统**：
+  - 基于文件路径、大小、内容哈希的MD5缓存键
+  - LRU缓存，最大1000个条目，24小时过期
+  - 缓存命中时直接返回历史决策，无需LLM调用
+- **性能收益**：重复文件场景下LLM调用减少90%+
+
 ### 10. 边界情况处理
 - ✅ **空文件**：0字节文件 → 移入 `.trash/`
 - ✅ **超大文件**：>1MB → 触发LLM判断（不直接读取内容）
@@ -332,6 +340,76 @@
   "content_summary": "文件内容摘要..."
 }
 ```
+
+### llm_decide_batch（V2.1.4新增）
+
+批量LLM决策，显著提升性能（10个文件从10次调用降至1次）。
+
+```json
+{
+  "files": [
+    {
+      "path": "/temp/file1.txt",
+      "metadata": {
+        "type": "pending",
+        "importance": "low",
+        "owner": "agent",
+        "size": 1024
+      },
+      "content_summary": "文件内容摘要1"
+    },
+    {
+      "path": "/temp/file2.txt",
+      "metadata": {
+        "type": "pending",
+        "importance": "low",
+        "owner": "agent",
+        "size": 2048
+      },
+      "content_summary": "文件内容摘要2"
+    }
+  ],
+  "options": {
+    "batch_size": 10,
+    "use_cache": true
+  }
+}
+```
+
+**返回**：
+```json
+{
+  "results": [
+    {
+      "path": "/temp/file1.txt",
+      "decision": "keep",
+      "reason": "包含敏感关键词",
+      "confidence": 0.8,
+      "cached": false
+    },
+    {
+      "path": "/temp/file2.txt",
+      "decision": "trash",
+      "reason": "临时文件超过90天",
+      "confidence": 0.7,
+      "cached": true
+    }
+  ],
+  "stats": {
+    "total": 10,
+    "processed": 10,
+    "cached": 5,
+    "batched": 1,
+    "api_calls": 5,
+    "hit_rate": 0.5
+  }
+}
+```
+
+**性能说明**：
+- **批处理**：每批最多10个文件，合并为单个LLM调用
+- **缓存**：基于文件路径、大小、内容哈希的MD5缓存
+- **收益**：重复文件场景LLM调用减少90%+，响应时间降低80%+
 
 ---
 

@@ -36,6 +36,10 @@ class Cleanup {
       'secret', 'password', 'token', 'key', 'credential', 'private',
       'backup', 'database', 'config'
     ];
+
+    // 批处理配置
+    this.batchSize = 10;
+    this.pendingLLMFiles = [];
   }
 
   /**
@@ -63,6 +67,9 @@ class Cleanup {
     const index = await this.manager.scanIndex();
     const files = index.files || [];
     result.scanned_files = files.length;
+
+    // 收集需要LLM判断的文件（用于批处理）
+    const llmPendingFiles = [];
 
     for (const file of files) {
       try {
@@ -162,33 +169,15 @@ class Cleanup {
           continue;
         }
 
-        // LLM判断（V2.1明确边界）
+        // LLM判断（V2.1明确边界）- 收集待批处理
         if (llmEnabled && this.shouldAskLLM(file, file.path, referenced)) {
-          const contentSummary = await this.getContentSummary(file.path, file);
-          const decision = await this.manager.llmDecideFile(file.path, file, contentSummary);
-          result.llm_decisions++;
-
-          // V2.1决策收敛：LLM decision = trash 且 confidence ≥ 0.7 → 执行（提高阈值减少误判）
-          if (decision.decision === 'trash' && (decision.confidence || 0) >= 0.7) {
-            if (!dryRun) {
-              await this.manager.moveToTrash(file.path, decision.reason, 'llm');
-            }
-            result.cleaned_files++;
-            result.cleaned_size += file.size || 0;
-            result.actions.push({
-              path: file.path,
-              action: 'move_to_trash',
-              reason: decision.reason,
-              decision_by: 'llm',
-              rule_stage: 'llm',
-              reference_checked: true,
-              metadata_trusted: metadataTrusted,
-              file_importance: file.importance,
-              confidence: decision.confidence
-            });
-          } else {
-            result.skipped_files++;
-          }
+          // 收集需要LLM判断的文件，稍后批量处理
+          llmPendingFiles.push({
+            path: file.path,
+            file: file,
+            metadataTrusted: metadataTrusted,
+            referenced: referenced
+          });
         } else {
           result.skipped_files++;
         }
@@ -198,6 +187,20 @@ class Cleanup {
           path: file.path,
           error: err.message
         });
+      }
+    }
+
+    // 批量处理LLM决策（性能优化：10个文件从10次LLM调用降至1次）
+    if (llmEnabled && llmPendingFiles.length > 0) {
+      try {
+        const batchResult = await this.batchLLMDecisions(llmPendingFiles, dryRun, result);
+        console.log(`[Cleanup] 批处理总结: ${batchResult.processed} 文件处理, ${batchResult.cleaned} 文件清理`);
+      } catch (err) {
+        result.errors.push({
+          phase: 'batch_llm_decisions',
+          error: err.message
+        });
+        console.error(`[Cleanup] LLM批处理失败: ${err.message}`);
       }
     }
 
@@ -460,22 +463,90 @@ class Cleanup {
     const targetBasename = path.basename(filePath);
     const targetNameWithoutExt = targetBasename.replace(/\.[^/.]+$/, '');
     
-    // 常见引用模式正则表达式
+    // 常见引用模式正则表达式（增强版V2.1.4）
     const referencePatterns = [
-      // import "filename" or import './filename'
+      // import "filename" or import './filename' (单行/多行)
       /import\s+['"]([^'"]+)['"]/g,
+      // import('filename') 动态导入
+      /import\s*\(\s*['"]([^'"]+)['"]/g,
       // require("filename") or require('./filename')
       /require\s*\(\s*['"]([^'"]+)['"]/g,
+      // require.resolve("filename")
+      /require\.resolve\s*\(\s*['"]([^'"]+)['"]/g,
       // from "filename"
       /from\s+['"]([^'"]+)['"]/g,
-      // #include "filename"
+      // Python: from module import something (相对导入)
+      /from\s+['"]([^'"]+)['"]\s+import/g,
+      // Python: import module
+      /import\s+['"]([^'"]+)['"]/g,
+      // #include "filename" (C/C++)
       /#include\s+["<]([^">]+)[">]/g,
-      // load("filename")
-      /load\s*\(\s*['"]([^'"]+)['"]/g
+      // load("filename") (Lua, Ruby等)
+      /load\s*\(\s*['"]([^'"]+)['"]/g,
+      // source("filename") (R, shell)
+      /source\s*\(\s*['"]([^'"]+)['"]/g,
+      // @import "filename" (CSS, Less, Sass)
+      /@import\s+['"]([^'"]+)['"]/g,
+      // require_relative "filename" (Ruby)
+      /require_relative\s+['"]([^'"]+)['"]/g,
+      // go: import "package"
+      /import\s+['"]([^'"]+)['"]/g,
+      // 多行导入（支持括号包裹的多个导入）
+      /import\s*\{([^}]+)\}\s*from\s+['"]([^'"]+)['"]/g,
+      /from\s+['"]([^'"]+)['"]\s+import\s*\(([^)]+)\)/g,
+      // 配置文件中的路径引用（JSON, YAML, XML）
+      /(?:path|file|dir|directory|include|require|src|source)\s*[:=]\s*['"]([^'"]+)['"]/gi
     ];
     
     const workspacePath = this.manager.workspacePath;
     const fs = require('fs');
+    
+    // 路径匹配辅助函数（V2.1.4增强）
+    const isPathMatch = (referencedPath, targetPath) => {
+      // 标准化路径：去除前后的./或./
+      let normalizedRef = referencedPath.trim();
+      if (normalizedRef.startsWith('./') || normalizedRef.startsWith('../')) {
+        // 相对路径：需要结合源文件位置解析，这里简化处理
+        normalizedRef = normalizedRef.replace(/^\.\//, '').replace(/^\.\.\//, '');
+      }
+      
+      // 去除查询参数和哈希（如 filename.js?version=1）
+      normalizedRef = normalizedRef.split('?')[0].split('#')[0];
+      
+      // 获取目标文件的基本信息
+      const targetDir = path.dirname(targetPath);
+      const targetName = path.basename(targetPath);
+      const targetNameNoExt = path.basename(targetPath, path.extname(targetPath));
+      
+      // 检查精确匹配
+      if (normalizedRef === targetPath || normalizedRef === targetName) {
+        return true;
+      }
+      
+      // 检查目录+文件名匹配（如 lib/utils.js 匹配 /lib/utils.js）
+      if (normalizedRef.endsWith('/' + targetName) || normalizedRef.includes('/' + targetName + '?')) {
+        return true;
+      }
+      
+      // 检查无扩展名匹配（如 import './utils' 匹配 /utils.js）
+      if (normalizedRef === targetNameNoExt || 
+          normalizedRef.endsWith('/' + targetNameNoExt) ||
+          normalizedRef === targetPath.replace(path.extname(targetPath), '')) {
+        return true;
+      }
+      
+      // 检查索引文件（如 import './dir' 匹配 /dir/index.js）
+      if (targetName === 'index.js' || targetName === 'index.ts' || 
+          targetName === '__init__.py') {
+        const parentDir = path.dirname(targetPath);
+        const dirName = path.basename(parentDir);
+        if (normalizedRef === dirName || normalizedRef.endsWith('/' + dirName)) {
+          return true;
+        }
+      }
+      
+      return false;
+    };
     
     // 扫描所有文本文件（简化：扫描当前目录下的.js、.py、.md、.json文件）
     const scanExtensions = ['.js', '.py', '.md', '.json', '.ts', '.jsx', '.tsx', '.html', '.css'];
@@ -502,11 +573,20 @@ class Cleanup {
           for (const pattern of referencePatterns) {
             let match;
             while ((match = pattern.exec(content)) !== null) {
-              const referencedPath = match[1];
-              // 简化：检查引用的路径是否包含目标文件名
-              if (referencedPath.includes(targetBasename) || 
-                  referencedPath.includes(targetNameWithoutExt)) {
-                // 找到引用
+              // 多模式正则可能捕获多个组，取第一个非空组
+              let referencedPath = '';
+              for (let i = 1; i < match.length; i++) {
+                if (match[i] && match[i].trim()) {
+                  referencedPath = match[i].trim();
+                  break;
+                }
+              }
+              
+              if (!referencedPath) continue;
+              
+              // 使用增强路径匹配算法
+              if (isPathMatch(referencedPath, filePath)) {
+                console.log(`[引用检查] 找到引用: ${otherPath} → ${filePath} (${referencedPath})`);
                 return true;
               }
             }
@@ -596,6 +676,86 @@ class Cleanup {
     
     // 默认不调用LLM（保守原则）
     return false;
+  }
+
+  /**
+   * 批量LLM决策处理（优化性能）
+   * @param {Array} files - 需要LLM判断的文件列表
+   * @param {boolean} dryRun - 是否试运行
+   * @param {object} result - 结果对象用于更新统计
+   * @returns {Promise<object>} 处理结果
+   */
+  async batchLLMDecisions(files, dryRun, result) {
+    if (!files || files.length === 0) {
+      return { processed: 0, cleaned: 0 };
+    }
+
+    console.log(`[Cleanup] LLM批处理开始: ${files.length} 个文件`);
+
+    // 准备批处理数据
+    const llmRequests = [];
+    for (const file of files) {
+      try {
+        const contentSummary = await this.getContentSummary(file.path, file.file);
+        llmRequests.push({
+          path: file.path,
+          metadata: file.file,
+          contentSummary,
+          metadataTrusted: file.metadataTrusted,
+          file
+        });
+      } catch (err) {
+        // 如果无法读取内容，记录错误并跳过
+        console.warn(`[Cleanup] 无法获取文件摘要 ${file.path}: ${err.message}`);
+        result.skipped_files++;
+        continue;
+      }
+    }
+
+    // 调用LLM批处理
+    const batchResult = await this.manager.llm.decideBatch(
+      llmRequests.map(req => ({
+        path: req.path,
+        metadata: req.metadata,
+        contentSummary: req.contentSummary
+      })),
+      { batchSize: this.batchSize, useCache: true }
+    );
+
+    // 处理决策结果
+    let cleaned = 0;
+    for (let i = 0; i < batchResult.results.length; i++) {
+      const llmDecision = batchResult.results[i];
+      const fileData = llmRequests[i];
+      result.llm_decisions++;
+
+      // V2.1决策收敛：LLM decision = trash 且 confidence ≥ 0.7 → 执行
+      if (llmDecision.decision === 'trash' && (llmDecision.confidence || 0) >= 0.7) {
+        if (!dryRun) {
+          await this.manager.moveToTrash(fileData.path, llmDecision.reason, 'llm');
+        }
+        result.cleaned_files++;
+        result.cleaned_size += fileData.metadata.size || 0;
+        cleaned++;
+        result.actions.push({
+          path: fileData.path,
+          action: 'move_to_trash',
+          reason: llmDecision.reason,
+          decision_by: 'llm',
+          rule_stage: 'llm',
+          reference_checked: true,
+          metadata_trusted: fileData.metadataTrusted,
+          file_importance: fileData.metadata.importance,
+          confidence: llmDecision.confidence,
+          cached: llmDecision.cached || false
+        });
+      } else {
+        result.skipped_files++;
+      }
+    }
+
+    console.log(`[Cleanup] LLM批处理完成: ${files.length} 个文件, ${cleaned} 个清理, ${batchResult.stats.cached} 缓存命中`);
+    return { processed: files.length, cleaned };
   }
 
   /**
