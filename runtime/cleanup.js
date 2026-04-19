@@ -141,17 +141,17 @@ class Cleanup {
           continue;
         }
 
-        // 检查删除规则（0字节文件）
+        // 检查删除规则（0字节文件）- 修改为移入.trash/，禁止直接删除
         if (this.shouldDeleteDirect(file, referenced)) {
           if (!dryRun) {
-            const fullPath = path.join(this.manager.workspacePath, file.path);
-            fs.unlinkSync(fullPath);
-            await this.manager.index.remove(file.path);
+            // 移入.trash/，禁止直接删除
+            await this.manager.moveToTrash(file.path, '0字节文件超过7天', 'rule');
+            // moveToTrash内部已更新索引，无需额外调用index.remove
           }
           result.cleaned_files++;
           result.actions.push({
             path: file.path,
-            action: 'delete_direct',
+            action: 'move_to_trash',
             reason: '0字节文件超过7天',
             decision_by: 'rule',
             rule_stage: 'direct_delete',
@@ -168,8 +168,8 @@ class Cleanup {
           const decision = await this.manager.llmDecideFile(file.path, file, contentSummary);
           result.llm_decisions++;
 
-          // V2.1决策收敛：LLM decision = trash 且 confidence ≥ 0.6 → 执行
-          if (decision.decision === 'trash' && (decision.confidence || 0) >= 0.6) {
+          // V2.1决策收敛：LLM decision = trash 且 confidence ≥ 0.7 → 执行（提高阈值减少误判）
+          if (decision.decision === 'trash' && (decision.confidence || 0) >= 0.7) {
             if (!dryRun) {
               await this.manager.moveToTrash(file.path, decision.reason, 'llm');
             }
@@ -354,29 +354,60 @@ class Cleanup {
   }
 
   /**
-   * 检查metadata是否可信（仅系统生成的metadata可信）
+   * 检查metadata是否可信（V2.1增强信任机制）
    */
   isMetadataTrusted(file) {
-    // 系统生成的metadata来源：space_index.json，系统自动更新字段
-    // 不可信来源：用户写入，文件内声明，缺失字段
+    // 可信来源优先级：
+    // 1. 系统索引生成（source: 'index'）
+    // 2. 系统hook/技能工具创建（source: 'system'）
+    // 3. 包含完整系统字段且逻辑一致
+    // 4. 来自保护路径的文件
     
-    // 检查是否来自索引系统
+    // 1. 系统索引生成
     if (file.source && file.source === 'index') {
       return true;
     }
     
-    // 检查是否包含系统自动更新的字段
-    if (file.last_used_at && file.created_at) {
-      // 简单检查：如果last_used_at在created_at之后，且格式正确
+    // 2. 系统工具创建
+    if (file.source && ['system', 'hook', 'skill', 'tool'].includes(file.source)) {
+      return true;
+    }
+    
+    // 3. 保护路径内的文件（默认可信）
+    const protectedPaths = [
+      '/system/', '/core/', '/skills/', '/memory/', '/.learnings/',
+      '/AGENTS.md', '/MEMORY.md', '/USER.md', '/SOUL.md', '/TOOLS.md', '/IDENTITY.md',
+      '/HEARTBEAT.md', '/BOOTSTRAP.md'
+    ];
+    
+    const filePath = file.path || '';
+    if (protectedPaths.some(path => filePath.startsWith(path))) {
+      return true;
+    }
+    
+    // 4. 包含完整系统字段且逻辑一致
+    if (file.last_used_at && file.created_at && file.updated_at) {
       try {
         const lastUsed = new Date(file.last_used_at);
         const created = new Date(file.created_at);
-        if (lastUsed >= created && lastUsed <= new Date()) {
-          return true;
+        const updated = new Date(file.updated_at);
+        const now = new Date();
+        
+        // 检查日期逻辑：创建时间 <= 更新时间 <= 最后使用时间 <= 当前时间
+        if (created <= updated && updated <= lastUsed && lastUsed <= now) {
+          // 检查字段完整性
+          if (file.size !== undefined && file.type && file.importance) {
+            return true;
+          }
         }
       } catch (e) {
         // 日期解析失败，不可信
       }
+    }
+    
+    // 5. 文件有引用关系标记（被其他文件引用）
+    if (file.referenced_by && file.referenced_by.length > 0) {
+      return true;
     }
     
     // 其他情况视为不可信
@@ -384,14 +415,80 @@ class Cleanup {
   }
 
   /**
-   * 检查文件是否被引用
+   * 检查文件是否被引用（V2.1增强：内容扫描 + 索引检查）
    */
   isFileReferenced(filePath) {
-    // TODO: 实现引用检查
-    // 简单实现：检查是否在索引中被标记为依赖
+    // 第一步：检查索引中的引用标记
     const file = this.manager.index.get(filePath);
     if (file && file.referenced_by && file.referenced_by.length > 0) {
       return true;
+    }
+    
+    // 第二步：扫描文件内容中的引用（简化实现）
+    // 获取目标文件的basename用于匹配
+    const path = require('path');
+    const targetBasename = path.basename(filePath);
+    const targetNameWithoutExt = targetBasename.replace(/\.[^/.]+$/, '');
+    
+    // 常见引用模式正则表达式
+    const referencePatterns = [
+      // import "filename" or import './filename'
+      /import\s+['"]([^'"]+)['"]/g,
+      // require("filename") or require('./filename')
+      /require\s*\(\s*['"]([^'"]+)['"]/g,
+      // from "filename"
+      /from\s+['"]([^'"]+)['"]/g,
+      // #include "filename"
+      /#include\s+["<]([^">]+)[">]/g,
+      // load("filename")
+      /load\s*\(\s*['"]([^'"]+)['"]/g
+    ];
+    
+    const workspacePath = this.manager.workspacePath;
+    const fs = require('fs');
+    
+    // 扫描所有文本文件（简化：扫描当前目录下的.js、.py、.md、.json文件）
+    const scanExtensions = ['.js', '.py', '.md', '.json', '.ts', '.jsx', '.tsx', '.html', '.css'];
+    
+    try {
+      // 获取workspace下所有文件
+      const allFiles = this.manager.index.getAllFiles() || [];
+      
+      for (const otherFile of allFiles) {
+        const otherPath = otherFile.path.startsWith('/') ? otherFile.path.substring(1) : otherFile.path;
+        const fullOtherPath = path.join(workspacePath, otherPath);
+        
+        // 跳过非文本文件和大文件
+        const ext = path.extname(otherPath).toLowerCase();
+        if (!scanExtensions.includes(ext)) continue;
+        
+        try {
+          const stats = fs.statSync(fullOtherPath);
+          if (stats.size > 100000) continue; // 跳过大于100KB的文件
+          
+          const content = fs.readFileSync(fullOtherPath, 'utf8');
+          
+          // 检查每个引用模式
+          for (const pattern of referencePatterns) {
+            let match;
+            while ((match = pattern.exec(content)) !== null) {
+              const referencedPath = match[1];
+              // 简化：检查引用的路径是否包含目标文件名
+              if (referencedPath.includes(targetBasename) || 
+                  referencedPath.includes(targetNameWithoutExt)) {
+                // 找到引用
+                return true;
+              }
+            }
+          }
+        } catch (err) {
+          // 跳过无法读取的文件
+          continue;
+        }
+      }
+    } catch (err) {
+      // 扫描失败，回退到索引检查
+      console.warn(`引用扫描失败: ${err.message}`);
     }
     
     // 默认返回false（未被引用）
@@ -402,36 +499,72 @@ class Cleanup {
    * 检查是否应使用LLM判断（V2.1明确边界）
    */
   shouldAskLLM(file, filePath, referenced) {
-    // 禁止调用LLM的情况：
-    // 1. 强规则已明确（由调用者检查）
-    // 2. 文件已被引用
+    // 禁止调用LLM的情况（V2.1严格边界）：
+    // 1. 文件已被引用（最高优先级）
     if (referenced) {
       return false;
     }
     
-    // 3. 在保护路径内（由调用者检查）
+    // 2. 在保护路径内
+    if (this.isProtectedPath(filePath)) {
+      return false;
+    }
     
-    // 可以调用LLM的情况：
+    // 3. 热文件（24小时内使用过）
+    if (this.isHotFile(file)) {
+      return false;
+    }
+    
+    // 4. 强规则文件类型（明确类型）
+    const strongTypes = ['.log', '.cache', '.tmp', '.temp', '.pyc', '.pyo', '.swp', '.swo', '~', '.bak', '.DS_Store', 'Thumbs.db'];
+    if (strongTypes.some(type => filePath.endsWith(type))) {
+      return false; // 强规则已覆盖，无需LLM
+    }
+    
+    // 5. 大文件（>5MB）不调用LLM（成本/效益比低）
+    const fs = require('fs');
+    const fullPath = path.join(this.manager.workspacePath, filePath);
+    try {
+      const stats = fs.statSync(fullPath);
+      if (stats.size > 5000000) { // >5MB
+        return false;
+      }
+    } catch (e) {
+      // 无法获取大小，保守起见不调用LLM
+      return false;
+    }
+    
+    // 可以调用LLM的情况（严格限制）：
     // 1. 无扩展名文件
-    const path = require('path');
-    const ext = path.extname(filePath);
+    const pathModule = require('path');
+    const ext = pathModule.extname(filePath);
     if (!ext || ext === '') {
       return true;
     }
     
-    // 2. fallback（未命中任何规则）- 由调用者判断
-    // 3. metadata不可信 + 非明确类型
+    // 2. metadata不可信 + 非明确类型 + 非保护路径
     if (!this.isMetadataTrusted(file)) {
       // 非明确类型：非强规则文件类型
-      const strongTypes = ['.log', '.cache', '.tmp', '.temp', '.pyc', '.pyo', '.swp', '.swo', '~', '.bak'];
-      if (!strongTypes.some(type => filePath.endsWith(type))) {
+      const ambiguousTypes = ['.txt', '.md', '.json', '.yml', '.yaml', '.xml', '.csv'];
+      if (ambiguousTypes.some(type => filePath.endsWith(type))) {
         return true;
       }
     }
     
-    // 4. 内容与类型冲突（需要在getContentSummary中检测）
+    // 3. 内容与类型明显冲突（例如.txt文件内容看起来像代码）
+    // （在getContentSummary中检测，此处不处理）
     
-    // 默认不调用LLM
+    // 4. 重要性为low且超过90天未使用（低价值文件）
+    if (file.importance === 'low' && file.last_used_at) {
+      const now = new Date();
+      const lastUsed = new Date(file.last_used_at);
+      const days = (now - lastUsed) / (1000 * 60 * 60 * 24);
+      if (days > 90) {
+        return true;
+      }
+    }
+    
+    // 默认不调用LLM（保守原则）
     return false;
   }
 

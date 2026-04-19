@@ -254,6 +254,54 @@ class Index {
   }
 
   /**
+   * 扫描文件系统获取所有文件（排除特定目录）
+   * @private
+   */
+  _scanFileSystem(rootPath) {
+    const fs = require('fs');
+    const path = require('path');
+    const result = [];
+    
+    // 排除目录：.trash, .git, node_modules, __pycache__, 以及隐藏目录
+    const excludeDirs = [
+      '.trash', '.git', 'node_modules', '__pycache__', 
+      '.DS_Store', 'Thumbs.db', '.openclaw', '.qclaw'
+    ];
+    
+    function walk(currentPath, relativeBase = '') {
+      if (!fs.existsSync(currentPath)) return;
+      
+      const items = fs.readdirSync(currentPath);
+      
+      for (const item of items) {
+        const fullPath = path.join(currentPath, item);
+        const relativePath = relativeBase ? path.join(relativeBase, item) : item;
+        const stat = fs.statSync(fullPath);
+        
+        // 跳过排除目录
+        if (excludeDirs.includes(item) || item.startsWith('.')) {
+          continue;
+        }
+        
+        if (stat.isDirectory()) {
+          // 递归扫描子目录
+          walk(fullPath, relativePath);
+        } else {
+          // 记录文件
+          result.push({
+            path: '/' + relativePath, // 索引中使用/开头的路径
+            size: stat.size,
+            mtime: stat.mtime.toISOString()
+          });
+        }
+      }
+    }
+    
+    walk(rootPath);
+    return result;
+  }
+
+  /**
    * 检查索引与文件系统的一致性（V2.1新增）
    * @returns {object} 一致性检查结果
    */
@@ -267,7 +315,10 @@ class Index {
     const missingInIndex = []; // 文件系统中存在但索引中没有
     const mismatchedSize = []; // 大小不匹配
     
-    // 检查索引中的每个文件
+    // 第一步：扫描文件系统获取所有文件（排除特定目录）
+    const allFilesInFs = this._scanFileSystem(workspacePath);
+    
+    // 第二步：检查索引中的每个文件
     for (const file of index.files) {
       const fullPath = path.join(workspacePath, file.path.startsWith('/') ? file.path.substring(1) : file.path);
       
@@ -287,8 +338,21 @@ class Index {
             diff: Math.abs(file.size - stats.size)
           });
         }
+        
+        // 从扫描结果中移除（标记为已在索引中）
+        const indexInFs = allFilesInFs.findIndex(f => f.path === file.path);
+        if (indexInFs !== -1) {
+          allFilesInFs.splice(indexInFs, 1);
+        }
       }
     }
+    
+    // 第三步：剩余在allFilesInFs中的文件就是索引中缺失的
+    missingInIndex.push(...allFilesInFs.map(file => ({
+      path: file.path,
+      reason: '未在索引中',
+      size: file.size
+    })));
     
     // 标记索引为dirty（如果发现不一致）
     const hasInconsistencies = missingInFs.length > 0 || missingInIndex.length > 0 || mismatchedSize.length > 0;
@@ -305,7 +369,8 @@ class Index {
       missing_in_fs: missingInFs,
       missing_in_index: missingInIndex,
       mismatched_size: mismatchedSize,
-      total_indexed: index.files.length
+      total_indexed: index.files.length,
+      total_in_fs: allFilesInFs.length + index.files.length - missingInFs.length
     };
   }
 

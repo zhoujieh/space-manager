@@ -169,27 +169,138 @@ class SpaceManager {
       fs.mkdirSync(trashPath, { recursive: true });
     }
 
-    // 移动文件
-    fs.renameSync(fullPath, trashFilePath);
+    let moved = false;
+    let logged = false;
+    let indexUpdated = false;
+    
+    try {
+      // 第一步：移动文件
+      fs.renameSync(fullPath, trashFilePath);
+      moved = true;
+      
+      // 第二步：记录日志
+      await this.logCleanup({
+        timestamp: new Date().toISOString(),
+        action: 'move_to_trash',
+        path: filePath,
+        reason,
+        decision_by: decisionBy
+      });
+      logged = true;
+      
+      // 第三步：更新索引
+      await this.index.remove(filePath);
+      indexUpdated = true;
+      
+      return {
+        success: true,
+        original_path: filePath,
+        trash_path: `/.trash/${trashFileName}`,
+        logged: true,
+        atomic: true
+      };
+    } catch (error) {
+      // 事务回滚
+      if (moved && !indexUpdated) {
+        try {
+          // 尝试将文件移回原处
+          if (fs.existsSync(trashFilePath)) {
+            fs.renameSync(trashFilePath, fullPath);
+          }
+        } catch (rollbackError) {
+          console.error(`事务回滚失败: ${rollbackError.message}`);
+        }
+      }
+      
+      // 如果日志已记录但索引未更新，记录警告
+      if (logged && !indexUpdated) {
+        console.warn(`事务部分成功：文件已移动且日志已记录，但索引未更新: ${error.message}`);
+      }
+      
+      return {
+        success: false,
+        error: `事务失败: ${error.message}`,
+        rolled_back: moved && !indexUpdated,
+        atomic_failure: true
+      };
+    }
+  }
 
-    // 记录日志
-    await this.logCleanup({
-      timestamp: new Date().toISOString(),
-      action: 'move_to_trash',
-      path: filePath,
-      reason,
-      decision_by: decisionBy
-    });
-
-    // 更新索引
-    await this.index.remove(filePath);
-
-    return {
-      success: true,
-      original_path: filePath,
-      trash_path: `/.trash/${trashFileName}`,
-      logged: true
-    };
+  /**
+   * 从回收站恢复文件
+   * @param {string} trashFileName - 回收站中的文件名（如 file.txt_1234567890）
+   * @param {string} targetPath - 恢复到的目标路径（可选，默认原路径）
+   */
+  async restoreFromTrash(trashFileName, targetPath = null) {
+    const trashPath = path.join(this.workspacePath, this.config.trashPath);
+    const trashFilePath = path.join(trashPath, trashFileName);
+    
+    if (!fs.existsSync(trashFilePath)) {
+      return {
+        success: false,
+        error: '回收站文件不存在'
+      };
+    }
+    
+    // 从文件名解析原始文件名（移除时间戳）
+    const match = trashFileName.match(/^(.+)_(\d+)$/);
+    if (!match) {
+      return {
+        success: false,
+        error: '无效的回收站文件名格式'
+      };
+    }
+    
+    const originalBasename = match[1];
+    const originalPath = targetPath || `/${originalBasename}`; // 简化：假设原路径在根目录
+    
+    const targetFullPath = path.join(this.workspacePath, originalPath);
+    
+    // 确保目标目录存在
+    const targetDir = path.dirname(targetFullPath);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    
+    // 检查目标文件是否已存在
+    if (fs.existsSync(targetFullPath)) {
+      return {
+        success: false,
+        error: '目标文件已存在'
+      };
+    }
+    
+    try {
+      // 移动文件回原位置
+      fs.renameSync(trashFilePath, targetFullPath);
+      
+      // 更新索引
+      await this.index.add(originalPath, {
+        source: 'restore',
+        restored_at: new Date().toISOString()
+      });
+      
+      // 记录恢复日志
+      await this.logCleanup({
+        timestamp: new Date().toISOString(),
+        action: 'restore_from_trash',
+        path: originalPath,
+        trash_file: trashFileName,
+        reason: '用户请求恢复'
+      });
+      
+      return {
+        success: true,
+        original_path: originalPath,
+        trash_file: trashFileName,
+        restored_at: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `恢复失败: ${error.message}`
+      };
+    }
   }
 
   /**
