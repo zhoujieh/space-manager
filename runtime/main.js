@@ -69,11 +69,107 @@ class SpaceManager {
       console.log('[Init] Created cleanup_log.json');
     }
 
+    // 更新 AGENTS.md，添加文件规则引用（最高优先级声明）
+    await this.updateAgentsMdWithRulesReference();
+
     return {
       success: true,
       message: 'Workspace initialized',
       directories: dirs
     };
+  }
+
+  /**
+   * 更新 AGENTS.md，添加文件规则引用（最高优先级声明）
+   */
+  async updateAgentsMdWithRulesReference() {
+    // 规则文档路径
+    const rulesDocPath = path.join(__dirname, '../docs/workspace-rules.md');
+    const agentsPath = path.join(this.workspacePath, 'AGENTS.md');
+    
+    // 构建引用内容
+    const referenceSection = `## ⚠️ 最高优先级：文件写入规则（强制阅读）
+
+在操作本 workspace 的任何文件前，**必须**阅读文件写入规则：
+
+**强制文档**：\`${rulesDocPath}\`
+
+### 该文档包含
+1. **目录结构说明** - 每个目录的用途
+2. **文件分类规则** - 什么文件放哪里（优先级表）
+3. **操作流程** - 如何写入、清理文件
+4. **工具调用** - 分类和清理工具使用方法
+
+**重要**：所有文件操作必须遵循上述规则。违反规则可能导致数据丢失或 workspace 损坏。
+
+---
+
+`;
+
+    try {
+      if (!fs.existsSync(agentsPath)) {
+        // 新 workspace：创建完整 AGENTS.md
+        const defaultContent = `# AGENTS.md - Your Workspace
+
+${referenceSection}
+This folder is home. Treat it that way.
+
+## First Run
+
+If \`BOOTSTRAP.md\` exists, that's your birth certificate. Follow it, figure out who you are, then delete it. You won't need it again.
+
+## Session Startup
+
+Before doing anything else:
+
+1. Read \`SOUL.md\` — this is who you are
+2. Read \`USER.md\` — this is who you're helping
+3. Read \`memory/YYYY-MM-DD.md\` (today + yesterday) for recent context
+4. **If in MAIN SESSION** (direct chat with your human): Also read \`MEMORY.md\`
+
+Don't ask permission. Just do it.`;
+        
+        fs.writeFileSync(agentsPath, defaultContent, 'utf8');
+        console.log('[Init] Created AGENTS.md with rules reference');
+      } else {
+        // 已有 AGENTS.md：检查是否已有引用
+        const existingContent = fs.readFileSync(agentsPath, 'utf8');
+        
+        if (existingContent.includes('最高优先级：文件写入规则')) {
+          console.log('[Init] AGENTS.md already has rules reference, skipping');
+          return;
+        }
+        
+        // 在标题后插入引用
+        const lines = existingContent.split('\n');
+        let newContent = '';
+        
+        // 找到标题行（以 # 开头）
+        let titleIndex = -1;
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].trim().startsWith('# ')) {
+            titleIndex = i;
+            break;
+          }
+        }
+        
+        if (titleIndex >= 0) {
+          // 在标题行后插入
+          const before = lines.slice(0, titleIndex + 1);
+          const after = lines.slice(titleIndex + 1);
+          newContent = before.join('\n') + '\n\n' + referenceSection + after.join('\n');
+        } else {
+          // 没有标题，直接添加到开头
+          newContent = referenceSection + existingContent;
+        }
+        
+        fs.writeFileSync(agentsPath, newContent, 'utf8');
+        console.log('[Init] Updated AGENTS.md with rules reference');
+      }
+    } catch (error) {
+      console.error('[Init] Failed to update AGENTS.md:', error.message);
+      // 不抛出错误，初始化继续
+    }
   }
 
   /**
