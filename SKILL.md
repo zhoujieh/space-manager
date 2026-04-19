@@ -1,15 +1,15 @@
-# Space Manager V2.1
+# Space Manager V2.1.1
 
 **OpenClaw Agent Workspace** 文件管理 + 自动清理 + LLM 判断系统
 
-> 🛡️ **V2.1（Strict Safe Edition）**：在 V2.0 基础上进行**最小侵入式修复**，强化安全规则：
-> - 强制引用检查优先于规则匹配
-> - 时间保护 > 一切清理规则  
-> - metadata 信任机制（仅系统生成可信）
-> - LLM 使用边界收敛
-> - node_modules 安全保护条件
-> - 决策收敛（confidence ≥ 0.6）
-> - 索引一致性补丁
+> 🛡️ **V2.1.1（Strict Safe Edition Patch）**：修复 V2.1 中 7 个未完全解决的问题：
+> - **0字节文件直接删除** → 强制移入 `.trash/`，禁止直接删除
+> - **索引一致性检查不完整** → 递归扫描文件系统，全面对比索引
+> - **引用检查框架未实现** → 添加文件内容引用扫描（基础实现）
+> - **原子化事务缺失** → `moveToTrash` 添加回滚机制
+> - **恢复机制未实现** → 新增 `restoreFromTrash` 方法
+> - **元数据信任机制不完整** → 扩展信任来源检测
+> - **LLM阈值和边界问题** → confidence 阈值 0.6 → 0.7，优化调用边界
 >
 > ⚠️ **范围说明**：本技能仅管理 OpenClaw agent workspace 目录（`~/.qclaw/workspace-*`），**不是电脑桌面**。
 > 桌面整理请使用「文件整理」技能。
