@@ -2,6 +2,53 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.1.4] - 2026-04-19
+
+### Performance & Optimization Release
+
+#### Performance - LLM Batch Processing & Caching
+- **LLM Batch Processing** - 10 files from 10 LLM calls down to 1 batch call (90% reduction)
+- **Enhanced Cache System** - LRU cache with content hash keys, 1000-entry limit, 24-hour TTL
+- **Batch Cleanup Integration** - Cleanup now collects pending LLM files and processes in batches
+
+#### Performance - Index Consistency Check Optimization
+- **Symbolic Link Detection** - Using `lstatSync` for accurate symlink detection with target validation
+- **Large Workspace Support** - Default scan limit of 10,000 files, configurable via `max_index_scan_files`
+- **Set Data Structures** - O(1) lookup performance vs O(n) array scans
+
+#### Enhancement - Reference Detection Regex Patterns
+- **Multi-language Import Support** - ES6 dynamic `import()`, `require.resolve()`, Python `from...import`, C++ `#include`, CSS `@import`, Ruby `require_relative`
+- **Multi-line Import Patterns** - Support for brace-wrapped imports and parenthesized imports
+- **Configuration File Path References** - Detection of path references in JSON, YAML, XML configs
+- **Precise Path Matching Algorithm** - Improved matching for relative paths, query strings, hashes, and extensionless imports
+
+#### Test Coverage - Comprehensive Integration Suite
+- **20+ Integration Tests** - Covering batch processing, cache performance, reference detection, symlink handling, and configuration validation
+- **10+ Unit Tests** - Focused on enhanced reference detection patterns and path matching accuracy
+- **Performance Benchmarks** - Tests for large workspace handling and cleanup throughput
+
+#### Fixed
+- **Cleanup Batch Integration** - Fixed issue where LLM decisions were not properly batched during cleanup runs
+- **Symbolic Link Consistency** - Improved handling of broken symlinks in index consistency checks
+- **Path Matching Edge Cases** - Fixed false positives/negatives in complex import patterns
+
+#### Changed
+- **skill.json Configuration** - Added `max_index_scan_files: 10000` configuration option
+- **Performance Defaults** - Batch size default increased to 10 files for optimal LLM API efficiency
+- **Reference Detection Algorithm** - Replaced simple substring matching with precise path resolution
+
+#### Added
+- **`llm_decide_batch` API** - New tool for bulk LLM decisions with detailed statistics
+- **Path Matching Helper** - `isPathMatch` function for accurate reference resolution
+- **Performance Metrics** - Batch processing statistics in LLM and cleanup results
+- **Configuration Validation** - Tests for skill.json configuration defaults
+
+#### Technical Details
+- **Batch Size**: Configurable via `cleanup.batchSize` (default: 10)
+- **Cache Key**: MD5 hash of path + size + type + content hash (first 200 chars)
+- **Symbolic Link Handling**: Separate validation for symlink targets vs symlink metadata
+- **Regex Patterns**: 15+ patterns covering 10+ programming languages and config formats
+
 ## [2.1.1] - 2026-04-19
 
 ### Security & Performance Fixes
