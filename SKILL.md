@@ -4,7 +4,7 @@
 
 ## 🔄 首次使用自检（读取本文件后立即执行）
 
-> 检查当前 workspace 的 `AGENTS.md` 是否包含 `## 📁 Space Manager` 章节。
+> 检查当前 workspace 的 `AGENTS.md` 是否包含 `## 📂 Space Manager` 章节。
 > - **不包含** → 将以下规则模板追加到 AGENTS.md 末尾（替换 `{workspace}` 为实际目录名）
 > - **已包含** → 跳过
 
