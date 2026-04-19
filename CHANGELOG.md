@@ -2,6 +2,14 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.1.2] - 2026-04-19
+
+### Security - Memory File Protection Supplement
+
+- **Protected Paths Extended** - Added `/.git`, `/memory`, `/.learnings` to protected paths
+- **HEARTBEAT Keyword** - Added to exempt keywords list (was missing)
+- **Test Coverage** - Added tests for memory/.learnings protected paths and HEARTBEAT.md exempt keyword
+
 ## [2.1.1] - 2026-04-19
 
 ### Security & Performance Fixes

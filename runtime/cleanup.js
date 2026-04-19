@@ -32,7 +32,7 @@ class Cleanup {
 
     // 豁免关键词
     this.exemptKeywords = [
-      'AGENTS', 'MEMORY', 'USER', 'SOUL', 'TOOLS', 'IDENTITY',
+      'AGENTS', 'MEMORY', 'USER', 'SOUL', 'TOOLS', 'IDENTITY', 'HEARTBEAT',
       'secret', 'password', 'token', 'key', 'credential', 'private',
       'backup', 'database', 'config'
     ];

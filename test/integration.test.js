@@ -106,6 +106,29 @@ async function runTests() {
       runner.assert(cleanup.isProtectedPath('/system/test.json'), '/system/test.json 应受保护');
       // /systembackup 不应受保护
       runner.assert(!cleanup.isProtectedPath('/systembackup/test.json'), '/systembackup/test.json 不应受保护');
+      // /memory 应受保护
+      runner.assert(cleanup.isProtectedPath('/memory/2026-04-19.md'), '/memory/2026-04-19.md 应受保护');
+      // /.learnings 应受保护
+      runner.assert(cleanup.isProtectedPath('/.learnings/LEARNINGS.md'), '/.learnings/LEARNINGS.md 应受保护');
+    } finally {
+      cleanupTempWorkspace(tempDir);
+    }
+  });
+
+  // 测试2.5: 豁免关键词检查
+  runner.test('豁免关键词检查 - HEARTBEAT.md应受保护', async () => {
+    const tempDir = createTempWorkspace();
+    try {
+      const manager = new SpaceManager(tempDir);
+      await manager.initialize();
+
+      const cleanup = manager.cleanup;
+
+      // 核心文件豁免
+      runner.assert(cleanup.hasExemptKeyword('/AGENTS.md'), 'AGENTS.md 应豁免');
+      runner.assert(cleanup.hasExemptKeyword('/MEMORY.md'), 'MEMORY.md 应豁免');
+      runner.assert(cleanup.hasExemptKeyword('/HEARTBEAT.md'), 'HEARTBEAT.md 应豁免');
+      runner.assert(cleanup.hasExemptKeyword('/IDENTITY.md'), 'IDENTITY.md 应豁免');
     } finally {
       cleanupTempWorkspace(tempDir);
     }
