@@ -6,6 +6,11 @@ All notable changes to the Space Manager skill will be documented in this file.
 
 ### Security & Performance Fixes
 
+#### Security - Memory File Protection Supplement
+- **Protected Paths Extended** - Added `/.git`, `/memory`, `/.learnings` to protected paths
+- **HEARTBEAT Keyword** - Added to exempt keywords list (was missing)
+- **Test Coverage** - Added tests for memory/.learnings protected paths and HEARTBEAT.md exempt keyword
+
 #### Fixed
 - **LLM Confidence Threshold Inconsistency** - Unified threshold to 0.7 across skill.json, cleanup.js, and SKILL.md
 - **Index Consistency Check Performance** - Added max scan limit (10,000 files), optimized symlink handling, improved statistics formulas

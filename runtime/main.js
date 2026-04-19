@@ -15,7 +15,7 @@ class SpaceManager {
     this.workspacePath = workspacePath;
     this.config = {
       trashPath: '/.trash',
-      protectedPaths: ['/core', '/system', '/.trash', '/skills'],
+      protectedPaths: ['/core', '/system', '/.trash', '/skills', '/.git', '/memory', '/.learnings'],
       protectedAgeHours: 24,
       lowImportanceDays: 7,
       unusedDays: 90,
