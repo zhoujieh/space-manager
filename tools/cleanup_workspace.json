@@ -1,0 +1,121 @@
+{
+  "name": "cleanup_workspace",
+  "description": "Execute workspace cleanup based on rules, move files to .trash (never delete)",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Only report what would be cleaned, don't actually move files"
+      },
+      "llm_enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Use LLM for uncertain files"
+      },
+      "force_rules": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Override default rules: 'strong', 'soft', 'all'"
+      },
+      "protected_paths": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": ["/core", "/system", "/.trash", ".git"],
+        "description": "Paths to never clean"
+      }
+    }
+  },
+  "returns": {
+    "type": "object",
+    "properties": {
+      "scanned_files": {
+        "type": "number"
+      },
+      "cleaned_files": {
+        "type": "number"
+      },
+      "cleaned_size": {
+        "type": "number"
+      },
+      "skipped_files": {
+        "type": "number"
+      },
+      "llm_decisions": {
+        "type": "number"
+      },
+      "errors": {
+        "type": "array"
+      },
+      "actions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": "string",
+            "action": "string",
+            "reason": "string",
+            "decision_by": "string"
+          }
+        }
+      }
+    }
+  },
+  "rules": {
+    "strong": [
+      {
+        "pattern": "*.log",
+        "reason": "强规则: 日志文件"
+      },
+      {
+        "pattern": "*.cache",
+        "reason": "强规则: 缓存文件"
+      },
+      {
+        "pattern": "*.tmp",
+        "reason": "强规则: 临时文件"
+      },
+      {
+        "pattern": "*.temp",
+        "reason": "强规则: 临时文件"
+      },
+      {
+        "pattern": "__pycache__/",
+        "reason": "强规则: Python缓存目录"
+      },
+      {
+        "pattern": "node_modules/",
+        "reason": "强规则: Node依赖目录（workspace根目录）"
+      }
+    ],
+    "soft": [
+      {
+        "condition": "importance=low && last_used > 7 days",
+        "reason": "软规则: 低重要性且超过7天未使用"
+      },
+      {
+        "condition": "last_used > 90 days",
+        "reason": "软规则: 超过90天未使用"
+      }
+    ],
+    "delete_direct": [
+      {
+        "condition": "size=0 && last_used > 7 days",
+        "reason": "0字节文件超过7天直接删除"
+      }
+    ]
+  },
+  "execution_order": [
+    "check_protected_paths",
+    "check_hot_files (< 24h)",
+    "apply_strong_rules",
+    "apply_soft_rules",
+    "apply_delete_rules",
+    "llm_decision_for_uncertain"
+  ]
+}

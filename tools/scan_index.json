@@ -1,0 +1,57 @@
+{
+  "name": "scan_index",
+  "description": "Scan and return the space index, optionally filter by type/importance/owner",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "description": "Filter by file type"
+      },
+      "importance": {
+        "type": "string",
+        "enum": ["high", "normal", "low"]
+      },
+      "owner": {
+        "type": "string",
+        "description": "Filter by owner"
+      },
+      "unused_days": {
+        "type": "number",
+        "description": "Filter files unused for N days"
+      },
+      "refresh": {
+        "type": "boolean",
+        "default": false,
+        "description": "Force rescan workspace and rebuild index"
+      }
+    }
+  },
+  "returns": {
+    "type": "object",
+    "properties": {
+      "total_files": {
+        "type": "number"
+      },
+      "total_size": {
+        "type": "number"
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": "string",
+            "type": "string",
+            "importance": "string",
+            "owner": "string",
+            "created_at": "string",
+            "last_used_at": "string",
+            "size": "number"
+          }
+        }
+      }
+    }
+  },
+  "index_file": "/system/space_index.json"
+}

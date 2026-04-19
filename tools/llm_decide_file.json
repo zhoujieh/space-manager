@@ -1,0 +1,53 @@
+{
+  "name": "llm_decide_file",
+  "description": "Use LLM to decide whether to keep or trash a file when rules are uncertain",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "File path"
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "type": "string",
+          "importance": "string",
+          "owner": "string",
+          "created_at": "string",
+          "last_used_at": "string",
+          "size": "number"
+        }
+      },
+      "content_summary": {
+        "type": "string",
+        "description": "Summary of file content (first 500 chars or extracted summary)"
+      }
+    },
+    "required": ["path"]
+  },
+  "returns": {
+    "type": "object",
+    "properties": {
+      "decision": {
+        "type": "string",
+        "enum": ["keep", "trash", "unsure"]
+      },
+      "reason": {
+        "type": "string",
+        "description": "Explanation of the decision"
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Confidence score of the decision"
+      },
+      "suggested_importance": {
+        "type": "string",
+        "enum": ["high", "normal", "low"]
+      }
+    }
+  },
+  "prompt_template": "You are a file cleanup assistant. Decide if this file should be kept or trashed.\n\nFile: {path}\nMetadata: {metadata}\nContent Summary: {content_summary}\n\nRules:\n- Log files, cache files, temp files → trash\n- Config files, documents, code → keep\n- If unsure → unsure\n\nReturn JSON: {\"decision\": \"keep|trash|unsure\", \"reason\": \"...\", \"confidence\": 0.0-1.0}"
+}

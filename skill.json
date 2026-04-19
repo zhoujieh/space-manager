@@ -1,0 +1,44 @@
+{
+  "name": "space-manager",
+  "version": "2.1.0",
+  "description": "OpenClaw agent workspace 文件管理（非桌面）。触发词：workspace、工作区、清理 workspace、.qclaw/workspace。桌面整理请用「文件整理」技能。",
+  "author": "Qclaw",
+  "entry": "runtime/main.js",
+  "tools_dir": "tools",
+  "runtime_dir": "runtime",
+  "agent_prompt": "agent.md",
+  "mandatory_read": true,
+  "capabilities": [
+    "file_classification",
+    "auto_organize",
+    "smart_cleanup",
+    "llm_decision",
+    "index_management"
+  ],
+  "protected_paths": [
+    "/core",
+    "/system",
+    "/.trash"
+  ],
+  "default_directories": [
+    "/docs",
+    "/dependencies",
+    "/core",
+    "/skills",
+    "/temp",
+    "/temp/logs",
+    "/temp/pending",
+    "/temp/cache",
+    "/.trash",
+    "/system"
+  ],
+  "index_file": "/system/space_index.json",
+  "cleanup_log": "/system/cleanup_log.json",
+  "config": {
+    "trash_path": "/.trash",
+    "protected_age_hours": 24,
+    "low_importance_days": 7,
+    "unused_days": 90,
+    "llm_decision_threshold": 0.3
+  }
+}

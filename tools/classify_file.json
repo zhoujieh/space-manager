@@ -1,0 +1,105 @@
+{
+  "name": "classify_file",
+  "description": "Classify a file and determine its target path based on rules",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Original file path"
+      },
+      "content": {
+        "type": "string",
+        "description": "File content (optional, for content-based classification)"
+      },
+      "filename": {
+        "type": "string",
+        "description": "Filename (extracted from path if not provided)"
+      }
+    },
+    "required": ["path"]
+  },
+  "returns": {
+    "type": "object",
+    "properties": {
+      "target_path": {
+        "type": "string",
+        "description": "Target path where file should be placed"
+      },
+      "type": {
+        "type": "string",
+        "enum": ["document", "log", "cache", "temp", "dependency", "config", "skill", "pending"]
+      },
+      "importance": {
+        "type": "string",
+        "enum": ["high", "normal", "low"],
+        "default": "normal"
+      },
+      "rule_matched": {
+        "type": "string",
+        "description": "Which rule matched"
+      },
+      "priority": {
+        "type": "number",
+        "description": "Rule priority"
+      }
+    }
+  },
+  "rules": [
+    {
+      "pattern": "*.log",
+      "target": "/temp/logs",
+      "type": "log",
+      "importance": "low",
+      "priority": 1
+    },
+    {
+      "pattern": "*.cache",
+      "target": "/temp/cache",
+      "type": "cache",
+      "importance": "low",
+      "priority": 1
+    },
+    {
+      "pattern": "*.tmp",
+      "target": "/temp/pending",
+      "type": "temp",
+      "importance": "low",
+      "priority": 1
+    },
+    {
+      "pattern": "*.md",
+      "target": "/docs",
+      "type": "document",
+      "importance": "normal",
+      "priority": 2
+    },
+    {
+      "pattern": "*.json",
+      "target": "/core",
+      "type": "config",
+      "importance": "high",
+      "priority": 2
+    },
+    {
+      "pattern": "skill.json",
+      "target": "/skills",
+      "type": "skill",
+      "importance": "high",
+      "priority": 3
+    },
+    {
+      "content_match": "import|require|from",
+      "target": "/dependencies/libs",
+      "type": "dependency",
+      "importance": "normal",
+      "priority": 3
+    }
+  ],
+  "fallback": {
+    "target": "/temp/pending",
+    "type": "pending",
+    "importance": "low",
+    "priority": 99
+  }
+}

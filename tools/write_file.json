@@ -1,0 +1,63 @@
+{
+  "name": "write_file",
+  "description": "Write a file to workspace with automatic metadata and index update",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Target file path (should be from classify_file result)"
+      },
+      "content": {
+        "type": "string",
+        "description": "File content to write"
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "File type"
+          },
+          "importance": {
+            "type": "string",
+            "enum": ["high", "normal", "low"],
+            "default": "normal"
+          },
+          "owner": {
+            "type": "string",
+            "default": "agent"
+          }
+        }
+      }
+    },
+    "required": ["path", "content"]
+  },
+  "returns": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "path": {
+        "type": "string"
+      },
+      "size": {
+        "type": "number"
+      },
+      "indexed": {
+        "type": "boolean"
+      }
+    }
+  },
+  "auto_metadata": {
+    "created_at": "timestamp",
+    "last_used_at": "timestamp",
+    "size": "content_length"
+  },
+  "actions": [
+    "create_directory_if_not_exists",
+    "write_file",
+    "update_space_index"
+  ]
+}

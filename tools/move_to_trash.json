@@ -1,0 +1,50 @@
+{
+  "name": "move_to_trash",
+  "description": "Move a file to .trash directory (never delete directly)",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "File path to move to trash"
+      },
+      "reason": {
+        "type": "string",
+        "description": "Reason for moving to trash"
+      },
+      "decision_by": {
+        "type": "string",
+        "enum": ["rule", "llm", "user"],
+        "default": "rule"
+      }
+    },
+    "required": ["path", "reason"]
+  },
+  "returns": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "original_path": {
+        "type": "string"
+      },
+      "trash_path": {
+        "type": "string"
+      },
+      "logged": {
+        "type": "boolean"
+      }
+    }
+  },
+  "trash_path": "/.trash",
+  "log_file": "/system/cleanup_log.json",
+  "rename_pattern": "{filename}_{timestamp}",
+  "actions": [
+    "create_trash_if_not_exists",
+    "generate_trash_filename",
+    "move_file",
+    "log_cleanup_action",
+    "update_space_index"
+  ]
+}
