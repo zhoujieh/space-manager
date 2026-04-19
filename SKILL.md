@@ -10,34 +10,90 @@
 
 规则模板：
 ```markdown
-## 📁 Space Manager（强制阅读）
+## 📁 Space Manager 文件管理（强制阅读）
 
-> **⚠️ 范围说明**：本技能仅管理 **OpenClaw agent workspace**（`~/.qclaw/workspace-*`），**不是电脑桌面**。
-> 桌面整理请使用「文件整理」技能。
+> ⚠️ **[MANDATORY] 本节内容必须在会话启动时阅读，不得跳过。**
+> 权威文档：`docs/workspace-rules.md` (V2.1.4) | `SKILL.md` (V2.1.4)
 
-### 触发关键词
-- "workspace"、"工作区"、"agent workspace"
-- "清理 workspace"、"整理 workspace"
-- ".qclaw/workspace"
-- "清理临时文件"（在 workspace 上下文中）
+### 🚫 绝对禁止
+1. **禁止直接操作文件**：所有文件操作必须通过工具执行
+2. **禁止直接删除文件**：清理必须 move → /.trash/，禁止 rm
+3. **禁止绕过分类**：写文件前必须调用 classify_file 分类
+4. **禁止修改保护路径**：/core /system /.trash 为只读
 
-**不触发**：桌面整理 → 用「文件整理」技能
+### 📋 操作流程
+**写入文件流程**：
+```
+1. classify_file(path, content) → 返回目标路径和类型
+2. write_file(target_path, content, metadata) → 写入 + 更新索引
+```
 
-### 核心规则
-| 规则类型 | 说明 |
-|---------|------|
-| **强规则** | `*.log`, `*.cache`, `*.tmp`, `__pycache__/`, `node_modules/` → 直接移入 .trash |
-| **软规则** | importance=low 且 >7天未用 → .trash |
-| **保护规则** | `/core/`, `/system/`, `/.trash/`, `.git/`, 根目录 `*.md` 永不触碰 |
-| **LLM判断** | 边界文件使用 LLM 决策（置信度 < 0.7 时需人工确认） |
+**清理流程**：
+```
+1. scan_index() → 获取索引
+2. cleanup_workspace() → 执行清理（不确定文件调用 llm_decide_file）
+```
 
-### 回收站路径
-~~~
-~/.qclaw/{workspace}/.trash/
-~~~
+### 🎯 文件分类规则
+**⚠️ 根目录核心文件豁免**：
+以下文件是 workspace 核心文件，**永远不移动**：
+- `AGENTS.md`、`MEMORY.md`、`IDENTITY.md`、`USER.md`、`SOUL.md`、`TOOLS.md`、`HEARTBEAT.md`
+- `BOOTSTRAP.md`（如果存在）
+- 根目录的隐藏文件（`.xxx`）
 
-### 详细文档
-完整规则见技能目录：`~/.qclaw/skills/space-manager/SKILL.md`
+**新文件分类规则**（仅适用于新创建的文件）：
+| 规则 | 目标路径 | 优先级 |
+|------|----------|--------|
+| `*.log` | /temp/logs | 1 |
+| `*.cache` | /temp/cache | 1 |
+| `*.tmp`, `*.temp` | /temp/pending | 1 |
+| 根目录 `*.md` | **不移动** | 0（豁免） |
+| 根目录 `*.json` | **不移动** | 0（豁免） |
+| `*.md`（子目录） | /docs | 2 |
+| `*.json`（子目录） | 原地保留 | 2 |
+| 包含 `import`, `require`, `from` | /dependencies/libs | 3 |
+| `skill.json` | /skills | 4 |
+| 未知类型 | /temp/pending | 99 |
+
+### ⚡ 清理规则
+**强规则（直接移入 .trash）**：
+- `*.log`, `*.cache`, `*.tmp`, `*.temp`
+- `__pycache__/`, `node_modules/`（workspace 根目录）
+
+**软规则（条件清理）**：
+- importance=low 且 last_used > 7天 → .trash
+- 未使用 > 90天 → .trash
+- 0字节文件 > 7天 → 直接删除
+
+### 🔒 保护规则
+**永不触碰**：
+- `/system/`, `/.trash/`, `.git/`
+- 根目录核心文件（AGENTS.md、MEMORY.md、IDENTITY.md、USER.md、SOUL.md、TOOLS.md、HEARTBEAT.md）
+
+**跳过清理**：
+- last_used < 24小时
+- importance = high
+- owner = user
+
+### 📝 Task-Artifact 文件处理
+**系统强制要求**：每次实质性工作后必须写入 `task-*.md` 文件。
+
+**处理流程**：
+```
+1. 完成实质性工作 → 写入 task-summary_YYYY-MM-DD_HHMM.md
+2. 写完后 → 立即移入 .trash/（不堆积）
+3. memory/YYYY-MM-DD.md → 持久化记录（不需要 task 文件）
+```
+
+**为什么可以立即移入 .trash/**：
+- task 文件与 memory 日志功能重复
+- memory 日志是按天归档的持久化记录
+- task 文件使命在写入时即结束
+
+**禁止行为**：
+- ❌ 写完 task 文件后留在根目录
+- ❌ 不写 task 文件（违反系统要求）
+- ❌ 在 cron isolated session 内写 task 文件
 ```
 
 ---
