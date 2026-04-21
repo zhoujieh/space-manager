@@ -20,9 +20,7 @@ class TestRunner {
   }
 
   async run() {
-    console.log('
-🧪 Space Manager 集成测试
-');
+    console.log('\n🧪 Space Manager 集成测试\n');
     console.log('=' .repeat(50));
 
     for (const { name, fn } of this.tests) {
@@ -345,8 +343,7 @@ async function runTests() {
       await manager.initialize();
 
       // 创建Python文件
-      fs.writeFileSync(path.join(tempDir, 'main.py'), 'from utils import helper
-import os');
+      fs.writeFileSync(path.join(tempDir, 'main.py'), 'from utils import helper\nimport os');
       fs.writeFileSync(path.join(tempDir, 'utils.py'), 'def helper(): pass');
 
       await manager.scanIndex();

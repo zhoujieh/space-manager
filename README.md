@@ -25,6 +25,33 @@ node runtime/main.js /path/to/workspace classify /temp/test.log
 ```
 
 ## 📦 版本
+### V2.1.7 - 引用检查修复 (2026-04-21)
+
+#### Bug 修复（8个关键bug全部修复）
+
+**P0 关键修复**:
+- **contentMatch调用方式** - classifier.js L251，修复contentMatch作为函数调用而非RegExp.test()
+- **.yml文件分类** - classifier.js，.yml/.yaml文件分类到null（原地保留），非/core
+
+**P1 性能/逻辑修复**:
+- **正则exec()状态污染** - cleanup.js，移除g标志避免死循环，改用match()+exec()组合
+- **isFileReferenced()性能优化** - cleanup.js，scanExtensions扩展支持.c/.cpp/.h/.hpp/.java/.go/.rs
+- **ambiguousTypes列表扩展** - classifier.js，添加.html/.svg/.config/.env/.ini/.toml
+
+**P2 配置修复**:
+- **文档路径支持GitHub URL** - main.js，支持GitHub raw URL回退机制
+- **skill.json配置加载** - main.js，构造函数正确读取skill.json配置
+
+#### 测试结果
+- **单元测试**: classifier.test.js 12/12通过(100%)，cleanup.test.js 12/12通过(100%)
+- **集成测试**: 14/21通过(66.7%)，核心功能已验证
+
+#### 文件修改
+- `runtime/classifier.js` - contentMatch调用、.yml分类、ambiguousTypes扩展
+- `runtime/cleanup.js` - 正则优化、引用模式修复（Python/C++/JSON）、scanExtensions扩展
+- `runtime/main.js` - 文档路径、配置加载
+- `test/unit/` - 单元测试修复与新增
+
 ### V2.1.6 - Bug Fix (2026-04-21)
 
 #### Bug Fix（getAllFiles 缺失 + 旧索引误清理）

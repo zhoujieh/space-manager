@@ -137,7 +137,7 @@ class Classifier {
       },
       {
         pattern: /\.yml$/i,
-        target: '/core',
+        target: null, // 原地保留（与 .yaml 一致）
         type: 'config',
         importance: 'high',
         priority: 2,
@@ -188,26 +188,21 @@ class Classifier {
         name: 'typescript_file'
       },
 
-      // 优先级 4: 内容匹配（仅限代码文件）
+            // 优先级 2: 代码依赖文件（V2.1.7: 含 import 的代码文件）
+      // pattern 函数识别代码文件；contentMatch 独立评估
       {
+        pattern: (filePath) => {
+          const codeExtensions = ['.js', '.jsx', '.ts', '.tsx', '.py', '.java', '.c', '.cpp', '.go', '.rs', '.php', '.rb', '.swift'];
+          return codeExtensions.includes(path.extname(filePath).toLowerCase());
+        },
         contentMatch: (filePath, content) => {
           if (!content) return false;
-          
-          // 仅限代码文件扩展名
-          const codeExtensions = ['.js', '.jsx', '.ts', '.tsx', '.py', '.java', '.c', '.cpp', '.go', '.rs', '.php', '.rb', '.swift'];
-          const ext = path.extname(filePath).toLowerCase();
-          if (!codeExtensions.includes(ext)) {
-            return false;
-          }
-          
-          // 检查是否包含导入/依赖语句
-          const importPattern = /(import|require|from|include|require_relative|using|package)/i;
-          return importPattern.test(content);
+          return /(?:^|[^\w])(?:import\s|require\s|from\s|include\s|require_relative\s)/m.test(content);
         },
         target: '/dependencies/libs',
         type: 'dependency',
         importance: 'normal',
-        priority: 4,
+        priority: 2,
         name: 'dependency_file'
       }
     ];
@@ -247,9 +242,16 @@ class Classifier {
         }
       }
 
-      // 内容匹配（需要提供内容）
-      if (!matched && rule.contentMatch && content) {
-        matched = rule.contentMatch.test(content);
+      // 内容匹配（V2.1.7: pattern+contentMatch 为 AND 关系，contentMatch 仅作补充筛选）
+      if (rule.contentMatch && content) {
+        const cm = rule.contentMatch(filePath, content);
+        if (rule.pattern) {
+          // 有 pattern：AND — pattern 决定基础匹配，contentMatch 做二次筛选
+          matched = matched && cm;
+        } else {
+          // 无 pattern：contentMatch 作为主条件
+          matched = cm;
+        }
       }
 
       if (matched) {

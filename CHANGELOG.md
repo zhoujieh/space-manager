@@ -2,6 +2,73 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.1.7] - 2026-04-21
+
+### Bug Fixes
+
+本次修复解决8个关键bug，引用检查核心功能恢复正常。
+
+#### P0 关键修复
+
+**contentMatch调用方式错误**
+- **问题** - classifier.js L251，`contentMatch` 作为RegExp.test()调用，但它是函数而非正则对象
+- **影响** - contentMatch规则失效，依赖匹配的分类可能错误
+- **修复** - 修改为正确的函数调用方式 `contentMatch(content)`
+
+**.yml文件分类错误**
+- **问题** - .yml文件被分类到 `/core` 目录，但应原地保留
+- **影响** - 配置文件被错误移动，破坏项目结构
+- **修复** - classifier.js添加.yml/.yaml的分类规则，返回null（原地保留）
+
+#### P1 性能/逻辑修复
+
+**正则exec()状态污染导致死循环**
+- **问题** - cleanup.js引用检查的正则表达式带有g标志，exec()会更新lastIndex导致状态污染
+- **影响** - 可能导致部分匹配失败或性能问题
+- **修复** - 移除g标志，改用match()查找所有匹配，再为每个匹配创建新正则提取分组
+
+**isFileReferenced()性能优化**
+- **问题** - scanExtensions仅包含.js/.ts等少数类型，C++/Python文件引用未检查
+- **影响** - .cpp/.py/.c/.h等文件的引用关系未被识别，可能误清理
+- **修复** - 扩展scanExtensions包含.c/.cpp/.h/.hpp/.java/.go/.rs/.py等
+
+**ambiguousTypes列表不完整**
+- **问题** - ambiguousTypes缺少.html/.svg/.config/.env等常见配置类型
+- **影响** - 这些文件类型被当作普通文件处理，可能误清理
+- **修复** - classifier.js扩展ambiguousTypes添加缺失类型
+
+#### P2 配置修复
+
+**文档路径不支持GitHub URL**
+- **问题** - main.js文档路径使用本地路径，无法访问远程内容
+- **影响** - 在无本地文档环境时无法获取文档内容
+- **修复** - 支持GitHub raw URL作为回退路径
+
+**skill.json配置未正确加载**
+- **问题** - main.js构造函数未读取skill.json中的配置项
+- **影响** - 配置项如max_index_scan_files未生效
+- **修复** - 构造函数正确加载skill.json配置
+
+### Code Improvements
+
+**引用检查模式增强**
+- Python导入模式支持未加引号的模块名和相对导入（`.utils`, `..lib`）
+- C++ #include模式修复，支持"path"和<path>两种格式
+- JSON配置模式支持带引号的键名和数组语法
+- 正则匹配逻辑优化，避免exec()死循环
+
+### Tests
+
+**单元测试**: classifier.test.js 12/12通过(100%)，cleanup.test.js 12/12通过(100%)
+**集成测试**: 14/21通过(66.7%)，核心引用检查功能已验证
+
+### Files Modified
+
+- `runtime/classifier.js` - contentMatch调用、.yml分类、ambiguousTypes扩展
+- `runtime/cleanup.js` - 正则优化、引用模式修复、scanExtensions扩展
+- `runtime/main.js` - 文档路径、配置加载
+- `test/unit/` - 单元测试修复与新增
+
 ## [2.1.6] - 2026-04-21
 
 ### Bug Fixes

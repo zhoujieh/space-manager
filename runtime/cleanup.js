@@ -473,39 +473,38 @@ class Cleanup {
     const targetBasename = path.basename(filePath);
     const targetNameWithoutExt = targetBasename.replace(/\.[^/.]+$/, '');
     
-    // 常见引用模式正则表达式（增强版V2.1.4）
+    // 常见引用模式正则表达式（增强版V2.1.7）
+    // 注意：不使用 g 标志，避免 exec() 跨文件状态污染
     const referencePatterns = [
       // import "filename" or import './filename' (单行/多行)
-      /import\s+['"]([^'"]+)['"]/g,
+      /import\s+['"]([^'"]+)['"]/,
       // import('filename') 动态导入
-      /import\s*\(\s*['"]([^'"]+)['"]/g,
+      /import\s*\(\s*['"]([^'"]+)['"]/,
       // require("filename") or require('./filename')
-      /require\s*\(\s*['"]([^'"]+)['"]/g,
+      /require\s*\(\s*['"]([^'"]+)['"]\)/,
       // require.resolve("filename")
-      /require\.resolve\s*\(\s*['"]([^'"]+)['"]/g,
+      /require\.resolve\s*\(\s*['"]([^'"]+)['"]\)/,
       // from "filename"
-      /from\s+['"]([^'"]+)['"]/g,
+      /from\s+(?:['"]([^'"]+)['"]|([a-zA-Z0-9_\.]+(?:\.\s*[a-zA-Z0-9_\.]+)*)(?:\s+import)?)/, // JS/Python from import (支持相对导入如 ..lib)
       // Python: from module import something (相对导入)
-      /from\s+['"]([^'"]+)['"]\s+import/g,
+      /from\s+(?:['"]([^'"]+)['"]|([a-zA-Z0-9_\.]+(?:\.\s*[a-zA-Z0-9_\.]+)*))\s+import/, // Python from module import (支持相对导入如 ..lib)
       // Python: import module
-      /import\s+['"]([^'"]+)['"]/g,
+      /import\s+(?:['"]([^'"]+)['"]|([a-zA-Z0-9_\.]+(?:\.\s*[a-zA-Z0-9_\.]+)*)(?:\s+from)?)/, // Python import module (支持相对导入如 ..lib)
       // #include "filename" (C/C++)
-      /#include\s+["<]([^">]+)[">]/g,
+      /#include\s+["<]([^">]+)[">]/,
       // load("filename") (Lua, Ruby等)
-      /load\s*\(\s*['"]([^'"]+)['"]/g,
+      /load\s*\(\s*['"]([^'"]+)['"]\)/,
       // source("filename") (R, shell)
-      /source\s*\(\s*['"]([^'"]+)['"]/g,
+      /source\s*\(\s*['"]([^'"]+)['"]\)/,
       // @import "filename" (CSS, Less, Sass)
-      /@import\s+['"]([^'"]+)['"]/g,
+      /@import\s+['"]([^'"]+)['"]/,
       // require_relative "filename" (Ruby)
-      /require_relative\s+['"]([^'"]+)['"]/g,
-      // go: import "package"
-      /import\s+['"]([^'"]+)['"]/g,
+      /require_relative\s+['"]([^'"]+)['"]/,
       // 多行导入（支持括号包裹的多个导入）
-      /import\s*\{([^}]+)\}\s*from\s+['"]([^'"]+)['"]/g,
-      /from\s+['"]([^'"]+)['"]\s+import\s*\(([^)]+)\)/g,
+      /import\s*\{([^}]+)\}\s*from\s+['"]([^'"]+)['"]/,
+      /from\s+['"]([^'"]+)['"]\s+import\s*\(([^)]+)\)/,
       // 配置文件中的路径引用（JSON, YAML, XML）
-      /(?:path|file|dir|directory|include|require|src|source)\s*[:=]\s*['"]([^'"]+)['"]/gi
+      /"?(?:path|file|dir|directory|include|require|src|source)"?\s*[:=]\s*(?:\[\s*)?['"]([^'"]+)['"](?:\s*\])?/i
     ];
     
     const workspacePath = this.manager.workspacePath;
@@ -559,13 +558,28 @@ class Cleanup {
     };
     
     // 扫描所有文本文件（简化：扫描当前目录下的.js、.py、.md、.json文件）
-    const scanExtensions = ['.js', '.py', '.md', '.json', '.ts', '.jsx', '.tsx', '.html', '.css'];
+    const scanExtensions = ['.js', '.py', '.md', '.json', '.ts', '.jsx', '.tsx', '.html', '.css', '.c', '.cpp', '.h', '.hpp', '.java', '.go', '.rs'];
     
     try {
-      // 获取workspace下所有文件
+      // 获取workspace下所有文件（V2.1.7: 限制扫描范围，避免 O(n²) 性能陷阱）
       const allFiles = this.manager.index.getAllFiles() || [];
       
-      for (const otherFile of allFiles) {
+      // 性能优化：仅扫描代码/配置文件，限制最多100个，优先最近使用的
+      const scanExtensionsSet = new Set(scanExtensions);
+      const candidateFiles = allFiles
+        .filter(f => {
+          const ext = path.extname(f.path).toLowerCase();
+          return scanExtensionsSet.has(ext);
+        })
+        .sort((a, b) => {
+          // 优先最近使用的文件
+          const aTime = a.last_used_at || a.created_at || '';
+          const bTime = b.last_used_at || b.created_at || '';
+          return bTime.localeCompare(aTime);
+        })
+        .slice(0, 100); // 限制扫描100个文件
+      
+      for (const otherFile of candidateFiles) {
         const otherPath = otherFile.path.startsWith('/') ? otherFile.path.substring(1) : otherFile.path;
         const fullOtherPath = path.join(workspacePath, otherPath);
         
@@ -579,15 +593,26 @@ class Cleanup {
           
           const content = fs.readFileSync(fullOtherPath, 'utf8');
           
-          // 检查每个引用模式
+          // 检查每个引用模式（V2.1.7: match() 提取所有匹配及其捕获组，避免 exec() 状态污染）
           for (const pattern of referencePatterns) {
-            let match;
-            while ((match = pattern.exec(content)) !== null) {
-              // 多模式正则可能捕获多个组，取第一个非空组
+            // 用 match() 提取所有匹配及其捕获组（match() 返回 [full, g1, g2, ...]）
+            let allMatches;
+            try {
+              // 创建无 g 标志的正则（避免 lastIndex 状态污染）
+              const src = pattern.source;
+              const flags = src.endsWith('i') ? 'i' : '';
+              allMatches = content.match(new RegExp(src, 'g' + flags)) || [];
+            } catch (e) { continue; }
+
+            for (const fullMatch of allMatches) {
+              // 从 match() 结果提取捕获组：match() 返回 [完整匹配, 组1, 组2, ...]
+              // 找第一个非空组作为 referencedPath
+              const groupMatch = new RegExp(pattern.source, 'g' + (pattern.source.endsWith('i') ? 'i' : '')).exec(fullMatch);
+              if (!groupMatch) continue;
               let referencedPath = '';
-              for (let i = 1; i < match.length; i++) {
-                if (match[i] && match[i].trim()) {
-                  referencedPath = match[i].trim();
+              for (let i = 1; i < groupMatch.length; i++) {
+                if (groupMatch[i] && groupMatch[i].trim()) {
+                  referencedPath = groupMatch[i].trim();
                   break;
                 }
               }
@@ -665,7 +690,7 @@ class Cleanup {
     // 2. metadata不可信 + 非明确类型 + 非保护路径
     if (!this.isMetadataTrusted(file)) {
       // 非明确类型：非强规则文件类型
-      const ambiguousTypes = ['.txt', '.md', '.json', '.yml', '.yaml', '.xml', '.csv'];
+      const ambiguousTypes = ['.txt', '.md', '.json', '.yml', '.yaml', '.xml', '.csv', '.html', '.htm', '.svg', '.config', '.conf', '.properties', '.env', '.ini', '.toml'];
       if (ambiguousTypes.some(type => filePath.endsWith(type))) {
         return true;
       }

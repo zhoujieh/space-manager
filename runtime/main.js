@@ -13,6 +13,33 @@ const LLM = require('./llm');
 class SpaceManager {
   constructor(workspacePath, config = {}) {
     this.workspacePath = workspacePath;
+    
+    // V2.1.7: 读取 skill.json 配置作为默认值
+    let skillConfig = {};
+    try {
+      const skillJsonPath = path.join(__dirname, '../skill.json');
+      if (fs.existsSync(skillJsonPath)) {
+        const skillJson = JSON.parse(fs.readFileSync(skillJsonPath, 'utf8'));
+        // 从 skill.json 提取配置
+        if (skillJson.config) {
+          skillConfig = {
+            trashPath: skillJson.config.trash_path || '/.trash',
+            protectedAgeHours: skillJson.config.protected_age_hours || 24,
+            lowImportanceDays: skillJson.config.low_importance_days || 7,
+            unusedDays: skillJson.config.unused_days || 90,
+            llmDecisionThreshold: skillJson.config.llm_decision_threshold || 0.7,
+            maxIndexScanFiles: skillJson.config.max_index_scan_files || 10000
+          };
+        }
+        // 合并 protected_paths
+        if (skillJson.protected_paths) {
+          skillConfig._extraProtectedPaths = skillJson.protected_paths;
+        }
+      }
+    } catch (e) {
+      // skill.json 读取失败，使用硬编码默认值
+    }
+    
     this.config = {
       trashPath: '/.trash',
       protectedPaths: ['/core', '/system', '/.trash', '/skills', '/.git', '/memory', '/.learnings'],
@@ -20,8 +47,17 @@ class SpaceManager {
       lowImportanceDays: 7,
       unusedDays: 90,
       llmDecisionThreshold: 0.7,
+      maxIndexScanFiles: 10000,
+      ...skillConfig,
       ...config
     };
+    
+    // 合并 skill.json 中的额外 protected_paths
+    if (skillConfig._extraProtectedPaths) {
+      const extraPaths = skillConfig._extraProtectedPaths.filter(p => !this.config.protectedPaths.includes(p));
+      this.config.protectedPaths = [...this.config.protectedPaths, ...extraPaths];
+      delete this.config._extraProtectedPaths;
+    }
 
     this.classifier = new Classifier(this);
     this.cleanup = new Cleanup(this);
@@ -87,8 +123,11 @@ class SpaceManager {
    * 更新 AGENTS.md，添加文件规则引用（最高优先级声明）
    */
   async updateAgentsMdWithRulesReference() {
-    // 规则文档路径
-    const rulesDocPath = path.join(__dirname, '../docs/workspace-rules.md');
+    // 规则文档路径（V2.1.7: 优先使用 GitHub URL，保留本地路径作为回退）
+    const rulesDocLocalPath = path.join(__dirname, '../docs/workspace-rules.md');
+    const rulesDocUrl = 'https://github.com/zhoujieh/space-manager/blob/main/docs/workspace-rules.md';
+    // 检查本地文件是否存在，不存在则使用远程 URL
+    const rulesDocPath = fs.existsSync(rulesDocLocalPath) ? rulesDocLocalPath : rulesDocUrl;
     const agentsPath = path.join(this.workspacePath, 'AGENTS.md');
     
     // 构建引用内容
