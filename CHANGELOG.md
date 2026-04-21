@@ -2,7 +2,32 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.1.5] - 2026-04-21
+
+### Bug Fixes
+
+#### Critical - init 后索引为空导致误清理
+- **init 不扫描文件系统** - 初始化只创建目录和索引文件，不扫描实际文件，导致 `space_index.json` 为空 `{files:[]}`
+- **索引为空时 cleanup 行为** - cleanup 读取空索引后调用 `index.rebuild()` 重新扫描，`importance=normal` 且无 `source` 字段
+- **metadata 不可信 → importance 被降级** - `isMetadataTrusted()` 要求 `source === 'index'` 或 `source in ['system','hook','skill','tool']`，rebuild 生成的文件无 source 字段 → metadata 不可信 → importance 降为 'low'
+- **软规则触发** - `importance=low` + `last_used > 7天` → 触发软规则，文件被移入 .trash/
+
+**根因链路**：
+```
+init → 索引为空 → cleanup读取空索引 → rebuild扫描 → importance=normal(无source)
+→ metadata不可信 → importance降为low → 软规则触发 → 误清理
+```
+
+**修复方案**：
+- `runtime/main.js` - `initialize()` 末尾添加 `await this.index.rebuild()`
+- `runtime/index.js` - `rebuild()` 生成文件时设置 `importance: 'high'` 和 `source: 'index'`
+
+**影响场景**：所有新 workspace 首次执行 `init` 后，`cleanup` 会误清理所有非热文件（>7天未用）。已存在的 workspace 在索引损坏后重建时也会触发。
+
+**已验证**：测试 workspace `~/.qclaw/workspace-agent-92f74409`，索引重建后所有文件 `importance=high`，软规则不再触发 ✅
+
 ## [2.1.4] - 2026-04-19
+
 
 ### Performance & Optimization Release
 
