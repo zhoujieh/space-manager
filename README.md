@@ -47,7 +47,7 @@ node runtime/main.js /path/to/workspace classify /temp/test.log
 
 ## 📦 版本
 
-### V2.1.4 - 性能优化与测试增强 (2026-04-19)
+### V2.1.5 - 性能优化与测试增强 (2026-04-19)
 **性能优化：**
 1. **LLM批处理与缓存** - 10文件/批，90% API调用减少，LRU缓存1000条目
 2. **索引一致性检查优化** - 符号链接lstatSync检测，Set数据结构O(1)查找
