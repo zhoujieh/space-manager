@@ -70,6 +70,9 @@ class SpaceManager {
       console.log('[Init] Created cleanup_log.json');
     }
 
+    // 扫描文件系统建立初始索引（v2.1.5修复：init不扫描导致索引为空）
+    await this.index.rebuild();
+
     // 更新 AGENTS.md，添加文件规则引用（最高优先级声明）
     await this.updateAgentsMdWithRulesReference();
 
