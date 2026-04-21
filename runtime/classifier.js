@@ -34,13 +34,17 @@ class Classifier {
         name: 'root_core_file_exempt'
       },
       
-      // 优先级 0: 根目录隐藏文件豁免
+      // 优先级 0: 根目录隐藏文件豁免（但 task-summary 除外）
       {
         pattern: (filePath, content) => {
           const basename = path.basename(filePath);
           const dirname = path.dirname(filePath);
-          // 根目录的隐藏文件豁免
+          // 根目录的隐藏文件豁免，但 task-summary 文件需要分类到 temp/logs
           if ((dirname === '.' || dirname === this.manager.workspacePath) && basename.startsWith('.')) {
+            // 排除 task-summary 文件，这些需要分类到 temp/logs
+            if (basename.includes('task-summary')) {
+              return false;
+            }
             return true;
           }
           return false;
@@ -52,7 +56,19 @@ class Classifier {
         name: 'root_hidden_file_exempt'
       },
 
-      // 优先级 1: 强规则（日志、缓存、临时文件）
+      // 优先级 1: 强规则（日志、缓存、临时文件、任务摘要）
+      {
+        // task-summary 文件（Agent任务摘要）- 支持 .task-summary 和 task-summary 两种形式
+        pattern: (filePath, content) => {
+          const basename = path.basename(filePath);
+          return basename.includes('task-summary');
+        },
+        target: '/temp/logs',
+        type: 'log',
+        importance: 'low',
+        priority: 1,
+        name: 'task_summary_file'
+      },
       {
         pattern: /\.log$/i,
         target: '/temp/logs',

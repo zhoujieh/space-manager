@@ -22,6 +22,7 @@
 |--------|------|----------|------|
 | 0 | 根目录核心文件<br/>（AGENTS.md, MEMORY.md, IDENTITY.md, USER.md, SOUL.md, TOOLS.md, HEARTBEAT.md, BOOTSTRAP.md） | **原地不动** | 最高优先级：这些文件永远不移动 |
 | 0 | 根目录隐藏文件<br/>（以 `.` 开头，如 `.git/`, `.trash/`, `.openclaw/`） | **原地不动** | 系统目录，禁止移动 |
+| 1 | 文件名包含 `task-summary` | `/temp/logs/` | Agent任务摘要文件（自动分类写入） |
 | 1 | 后缀 `.log` | `/temp/logs/` | 程序日志文件 |
 | 1 | 后缀 `.cache` | `/temp/cache/` | 缓存文件 |
 | 1 | 后缀 `.tmp` `.temp` | `/temp/pending/` | 临时文件 |
