@@ -45,6 +45,9 @@ node runtime/main.js /path/to/workspace classify /temp/test.log
 - **20+集成测试**：覆盖所有核心功能边界场景
 - **自动化验证**：确保每次更新不破坏现有功能
 
+### Bug 修复（V2.1.5新增）
+- **init 后索引为空导致误清理**：initialize() 末尾添加 rebuild()，rebuild() 生成文件设置 importance=high+source=index
+
 ## 📦 版本
 
 ### V2.1.5 - Bug Fix: init 后索引为空导致误清理 (2026-04-21)
@@ -56,7 +59,7 @@ node runtime/main.js /path/to/workspace classify /temp/test.log
 
 **已验证**：测试 workspace `~/.qclaw/workspace-agent-92f74409`，索引重建后所有文件 `importance=high`，软规则不再触发 ✅
 
-### V2.1.5 - 性能优化与测试增强 (2026-04-19)
+### V2.1.4 - 性能优化与测试增强 (2026-04-19)
 **性能优化：**
 1. **LLM批处理与缓存** - 10文件/批，90% API调用减少，LRU缓存1000条目
 2. **索引一致性检查优化** - 符号链接lstatSync检测，Set数据结构O(1)查找
