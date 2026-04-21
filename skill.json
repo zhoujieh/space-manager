@@ -1,6 +1,6 @@
 {
   "name": "space-manager",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "description": "OpenClaw agent workspace 文件管理（非桌面）。触发词：workspace、工作区、清理 workspace、.qclaw/workspace。桌面整理请用「文件整理」技能。",
   "author": "Qclaw",
   "entry": "runtime/main.js",
