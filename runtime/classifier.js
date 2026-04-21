@@ -185,7 +185,7 @@ class Classifier {
           }
           
           // 检查是否包含导入/依赖语句
-          const importPattern = /\b(import|require|from|include|require_relative|using|package)\b/i;
+          const importPattern = /(import|require|from|include|require_relative|using|package)/i;
           return importPattern.test(content);
         },
         target: '/dependencies/libs',

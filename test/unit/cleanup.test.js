@@ -37,7 +37,9 @@ class TestRunner {
   }
 
   async run() {
-    console.log('\n🧪 Cleanup 单元测试 - 引用检查增强\n');
+    console.log('
+🧪 Cleanup 单元测试 - 引用检查增强
+');
     console.log('=' .repeat(50));
 
     for (const { name, fn } of this.tests) {
@@ -53,8 +55,10 @@ class TestRunner {
     }
 
     console.log('=' .repeat(50));
-    console.log(`\n📊 结果: ${this.passed} 通过, ${this.failed} 失败`);
-    console.log(`成功率: ${((this.passed / this.tests.length) * 100).toFixed(1)}%\n`);
+    console.log(`
+📊 结果: ${this.passed} 通过, ${this.failed} 失败`);
+    console.log(`成功率: ${((this.passed / this.tests.length) * 100).toFixed(1)}%
+`);
 
     return this.failed === 0;
   }
@@ -106,7 +110,8 @@ async function runTests() {
 
       // 创建测试文件
       const testFile = path.join(tempDir, 'test.js');
-      fs.writeFileSync(testFile, 'import "./utils.js";\nimport "../lib/math.js";');
+      fs.writeFileSync(testFile, 'import "./utils.js";
+import "../lib/math.js";');
 
       // 创建被引用的文件
       const utilsFile = path.join(tempDir, 'utils.js');
@@ -161,7 +166,8 @@ async function runTests() {
       const cleanup = new Cleanup(manager);
 
       const testFile = path.join(tempDir, 'test.js');
-      fs.writeFileSync(testFile, 'const fs = require("fs");\nconst utils = require("./utils");');
+      fs.writeFileSync(testFile, 'const fs = require("fs");
+const utils = require("./utils");');
 
       const utilsFile = path.join(tempDir, 'utils.js');
       fs.writeFileSync(utilsFile, 'module.exports = {};');
@@ -213,7 +219,8 @@ async function runTests() {
       const cleanup = new Cleanup(manager);
 
       const testFile = path.join(tempDir, 'test.py');
-      fs.writeFileSync(testFile, 'from utils import helper\nfrom ..lib import math');
+      fs.writeFileSync(testFile, 'from utils import helper
+from ..lib import math');
 
       const utilsFile = path.join(tempDir, 'utils.py');
       fs.writeFileSync(utilsFile, 'def helper(): pass');
@@ -239,7 +246,8 @@ async function runTests() {
       const cleanup = new Cleanup(manager);
 
       const testFile = path.join(tempDir, 'test.py');
-      fs.writeFileSync(testFile, 'import os\nimport utils');
+      fs.writeFileSync(testFile, 'import os
+import utils');
 
       const utilsFile = path.join(tempDir, 'utils.py');
       fs.writeFileSync(utilsFile, 'def helper(): pass');
@@ -265,7 +273,8 @@ async function runTests() {
       const cleanup = new Cleanup(manager);
 
       const testFile = path.join(tempDir, 'test.cpp');
-      fs.writeFileSync(testFile, '#include "utils.h"\n#include <vector>');
+      fs.writeFileSync(testFile, '#include "utils.h"
+#include <vector>');
 
       const utilsFile = path.join(tempDir, 'utils.h');
       fs.writeFileSync(utilsFile, '#pragma once');
@@ -291,7 +300,8 @@ async function runTests() {
       const cleanup = new Cleanup(manager);
 
       const testFile = path.join(tempDir, 'style.css');
-      fs.writeFileSync(testFile, '@import "variables.css";\n@import url("theme.css");');
+      fs.writeFileSync(testFile, '@import "variables.css";
+@import url("theme.css");');
 
       const variablesFile = path.join(tempDir, 'variables.css');
       fs.writeFileSync(variablesFile, ':root { --color: red; }');

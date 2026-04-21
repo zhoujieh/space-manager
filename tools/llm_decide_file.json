@@ -49,5 +49,16 @@
       }
     }
   },
-  "prompt_template": "You are a file cleanup assistant. Decide if this file should be kept or trashed.\n\nFile: {path}\nMetadata: {metadata}\nContent Summary: {content_summary}\n\nRules:\n- Log files, cache files, temp files → trash\n- Config files, documents, code → keep\n- If unsure → unsure\n\nReturn JSON: {\"decision\": \"keep|trash|unsure\", \"reason\": \"...\", \"confidence\": 0.0-1.0}"
+  "prompt_template": "You are a file cleanup assistant. Decide if this file should be kept or trashed.
+
+File: {path}
+Metadata: {metadata}
+Content Summary: {content_summary}
+
+Rules:
+- Log files, cache files, temp files → trash
+- Config files, documents, code → keep
+- If unsure → unsure
+
+Return JSON: {\"decision\": \"keep|trash|unsure\", \"reason\": \"...\", \"confidence\": 0.0-1.0}"
 }

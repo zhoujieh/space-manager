@@ -20,7 +20,9 @@ class TestRunner {
   }
 
   async run() {
-    console.log('\n🧪 Space Manager 集成测试\n');
+    console.log('
+🧪 Space Manager 集成测试
+');
     console.log('=' .repeat(50));
 
     for (const { name, fn } of this.tests) {
@@ -36,8 +38,10 @@ class TestRunner {
     }
 
     console.log('=' .repeat(50));
-    console.log(`\n📊 结果: ${this.passed} 通过, ${this.failed} 失败`);
-    console.log(`成功率: ${((this.passed / this.tests.length) * 100).toFixed(1)}%\n`);
+    console.log(`
+📊 结果: ${this.passed} 通过, ${this.failed} 失败`);
+    console.log(`成功率: ${((this.passed / this.tests.length) * 100).toFixed(1)}%
+`);
 
     return this.failed === 0;
   }
@@ -341,7 +345,8 @@ async function runTests() {
       await manager.initialize();
 
       // 创建Python文件
-      fs.writeFileSync(path.join(tempDir, 'main.py'), 'from utils import helper\nimport os');
+      fs.writeFileSync(path.join(tempDir, 'main.py'), 'from utils import helper
+import os');
       fs.writeFileSync(path.join(tempDir, 'utils.py'), 'def helper(): pass');
 
       await manager.scanIndex();

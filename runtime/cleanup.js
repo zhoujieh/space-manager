@@ -230,7 +230,7 @@ class Cleanup {
       // 精确匹配或目录前缀匹配（避免 /coredata 匹配 /core）
       if (filePath === protectedPath ||
           filePath.startsWith(protectedPath + '/') ||
-          filePath.startsWith(protectedPath + '\\')) {
+          filePath.startsWith(protectedPath + '\')) {
         return true;
       }
     }
