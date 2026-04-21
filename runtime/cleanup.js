@@ -64,8 +64,18 @@ class Cleanup {
     };
 
     // 获取索引
-    const index = await this.manager.scanIndex();
-    const files = index.files || [];
+    let index = await this.manager.scanIndex();
+    let files = index.files || [];
+
+    // V2.1.6: 检测旧索引（无source字段），自动rebuild避免误清理
+    if (files.length > 0 && files.some(f => !f.source)) {
+      console.log('[Cleanup] 检测到旧索引（文件缺少source字段），自动重建索引...');
+      await this.manager.index.rebuild();
+      index = await this.manager.scanIndex();
+      files = index.files || [];
+      console.log(`[Cleanup] 索引重建完成，${files.length} 个文件`);
+    }
+
     result.scanned_files = files.length;
 
     // 收集需要LLM判断的文件（用于批处理）
@@ -230,7 +240,7 @@ class Cleanup {
       // 精确匹配或目录前缀匹配（避免 /coredata 匹配 /core）
       if (filePath === protectedPath ||
           filePath.startsWith(protectedPath + '/') ||
-          filePath.startsWith(protectedPath + '\')) {
+          filePath.startsWith(protectedPath + '/')) {
         return true;
       }
     }

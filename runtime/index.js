@@ -491,6 +491,15 @@ class Index {
   }
 
   /**
+   * 获取索引中所有文件（供引用扫描等使用）
+   * @returns {Array} 文件列表
+   */
+  getAllFiles() {
+    const index = this.readIndex();
+    return index.files || [];
+  }
+
+  /**
    * 获取索引状态
    */
   getStatus() {

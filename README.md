@@ -25,6 +25,13 @@ node runtime/main.js /path/to/workspace classify /temp/test.log
 ```
 
 ## 📦 版本
+### V2.1.6 - Bug Fix (2026-04-21)
+
+#### Bug Fix（getAllFiles 缺失 + 旧索引误清理）
+- **getAllFiles 缺失** - Index 类缺少 `getAllFiles()` 方法，导致 cleanup 引用扫描全部失败（79条报错），被引用的文件无法被保护
+- **旧索引自动重建** - cleanup 启动时检测无 source 字段的旧索引，自动调用 rebuild() 重建，避免 importance 被降级为 low 导致误清理
+- **已验证** - 模拟旧索引（无 source, importance=normal）→ 自动重建为 110 文件，0 个被误清理 ✅
+
 ### V2.1.5 - 功能更新与 Bug Fix (2026-04-21)
 
 #### 功能更新

@@ -1,4 +1,4 @@
-# Space Manager V2.1.5
+# Space Manager V2.1.6
 
 **OpenClaw Agent Workspace** 文件管理 + 自动清理 + LLM 判断系统
 
@@ -13,7 +13,7 @@
 ## 📁 Space Manager 文件管理（强制阅读）
 
 > ⚠️ **[MANDATORY] 本节内容必须在会话启动时阅读，不得跳过。**
-> 权威文档：`docs/workspace-rules.md` (V2.1.5) | `SKILL.md` (V2.1.5)
+> 权威文档：`docs/workspace-rules.md` (V2.1.6) | `SKILL.md` (V2.1.6)
 
 ### 🚫 绝对禁止
 1. **禁止直接操作文件**：所有文件操作必须通过工具执行
@@ -572,7 +572,7 @@ node runtime/main.js /path/to/workspace cleanup --force
 
 ```json
 {
-  "version": "2.1.5",
+  "version": "2.1.6",
   "last_updated": "2026-04-21T10:30:00Z",
   "files": [
     {

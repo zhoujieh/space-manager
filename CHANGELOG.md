@@ -2,6 +2,29 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.1.6] - 2026-04-21
+
+### Bug Fixes
+
+#### Critical - getAllFiles 缺失导致引用扫描失败
+- **Index 类缺少 `getAllFiles()` 方法** - cleanup.js 调用 `this.manager.index.getAllFiles()` 获取所有文件做引用扫描，但 Index 类从未定义该方法
+- **影响** - 每次引用扫描均报错 `this.manager.index.getAllFiles is not a function`，引用检查形同虚设，被引用的文件仍可能被清理
+- **修复** - 在 Index 类中添加 `getAllFiles()` 方法，返回 `readIndex().files`
+
+#### Critical - 旧索引自动重建
+- **旧索引无 source 字段** - 早期版本生成的索引文件无 `source` 字段，`importance=normal`，导致 `isMetadataTrusted()` 返回 false → importance 被降级为 low → 软规则触发误清理
+- **路径缺失 /core 前缀** - 旧索引中 `core/research/` 下的文件路径记录为 `/research/...`（少了 `/core`），保护路径 `/core/` 匹配不到
+- **修复** - cleanup 启动时检测索引中是否存在无 source 字段的文件，如有则自动调用 `rebuild()` 重建索引
+- **验证** - 模拟旧索引（5个文件，无 source，importance=normal）→ cleanup 自动重建为 110 个文件，0 个被误清理 ✅
+
+**根因链路**：
+```
+旧索引无source字段 → isMetadataTrusted()=false → importance降为low
+→ 软规则触发（low + >7天未用）→ 核心研究文件被误移入回收站
+```
+
+**同时修复**：`getAllFiles()` 缺失导致引用扫描全部失败（79条报错），重建后引用检查恢复正常 ✅
+
 ## [2.1.5] - 2026-04-21
 
 ### Features

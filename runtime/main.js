@@ -145,8 +145,7 @@ Don't ask permission. Just do it.`;
         }
         
         // 在标题后插入引用
-        const lines = existingContent.split('
-');
+        const lines = existingContent.split('\n');
         let newContent = '';
         
         // 找到标题行（以 # 开头）
@@ -162,11 +161,7 @@ Don't ask permission. Just do it.`;
           // 在标题行后插入
           const before = lines.slice(0, titleIndex + 1);
           const after = lines.slice(titleIndex + 1);
-          newContent = before.join('
-') + '
-
-' + referenceSection + after.join('
-');
+          newContent = before.join('\n') + '\n\n' + referenceSection + after.join('\n');
         } else {
           // 没有标题，直接添加到开头
           newContent = referenceSection + existingContent;
