@@ -47,6 +47,15 @@ node runtime/main.js /path/to/workspace classify /temp/test.log
 
 ## 📦 版本
 
+### V2.1.5 - Bug Fix: init 后索引为空导致误清理 (2026-04-21)
+**根因修复**：
+1. **runtime/main.js** - `initialize()` 末尾添加 `await this.index.rebuild()`，init 后立即扫描文件系统
+2. **runtime/index.js** - `rebuild()` 生成文件时设置 `importance: 'high'` + `source: 'index'`，确保 metadata 可信
+
+**问题描述**：v2.1.4 及之前版本，init 只创建空索引，cleanup 读取空索引后 rebuild，`importance=normal` + 无 source 字段 → metadata 不可信 → importance 降为 low → 软规则触发 → 误清理。
+
+**已验证**：测试 workspace `~/.qclaw/workspace-agent-92f74409`，索引重建后所有文件 `importance=high`，软规则不再触发 ✅
+
 ### V2.1.5 - 性能优化与测试增强 (2026-04-19)
 **性能优化：**
 1. **LLM批处理与缓存** - 10文件/批，90% API调用减少，LRU缓存1000条目
