@@ -4,6 +4,14 @@ All notable changes to the Space Manager skill will be documented in this file.
 
 ## [2.1.5] - 2026-04-21
 
+### Features
+
+#### Task Summary 文件分类
+- **规则添加** - workspace-rules.md 新增 task-summary 文件分类规则（优先级1）
+- **分类器支持** - classifier.js 添加 task-summary 文件识别逻辑，支持 `.task-summary` 隐藏文件
+- **根目录隐藏文件豁免调整** - 根目录隐藏文件豁免规则排除 task-summary 文件，确保其正确分类到 `/temp/logs/`
+- **影响**：所有 task-summary 文件（含以 `.` 开头的隐藏文件）自动分类到 `temp/logs/` 目录
+
 ### Bug Fixes
 
 #### Critical - init 后索引为空导致误清理
