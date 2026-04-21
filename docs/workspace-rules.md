@@ -118,7 +118,7 @@ print(f"Target path: {result['target_path']}")
 
 ---
 
-**版本**：V2.1.4 (Performance Optimized Edition)  
-**最后更新**：2026-04-19  
+**版本**：V2.1.5 (Bug Fix)  
+**最后更新**：2026-04-21  
 **对应分类器版本**：classifier.js (priority-based rules)  
-**性能优化**：LLM批处理、缓存系统、索引检查优化、引用检测增强
+**修复内容**：init 后索引为空导致误清理问题
