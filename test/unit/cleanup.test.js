@@ -1,6 +1,6 @@
 /**
  * Cleanup 模块单元测试
- * 版本: V2.1.4 - 引用检查增强测试
+ * 版本: V2.1.5 - Bug Fix: init后索引为空导致误清理
  */
 
 const fs = require('fs');

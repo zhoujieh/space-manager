@@ -572,8 +572,8 @@ node runtime/main.js /path/to/workspace cleanup --force
 
 ```json
 {
-  "version": "2.1.4",
-  "last_updated": "2024-01-15T10:30:00Z",
+  "version": "2.1.5",
+  "last_updated": "2026-04-21T10:30:00Z",
   "files": [
     {
       "path": "/workspace/docs/readme.md",
