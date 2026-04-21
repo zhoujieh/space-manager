@@ -177,7 +177,8 @@ class Index {
           files.push({
             path: '/' + relativePath,
             type: this.detectType(item.name),
-            importance: 'normal',
+            importance: 'high',
+            source: 'index',
             owner: 'agent',
             created_at: stats.birthtime.toISOString(),
             last_used_at: stats.mtime.toISOString(),
