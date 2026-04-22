@@ -1,12 +1,12 @@
-# Space Manager V2.2.1
+# Space Manager V2.3.0
 
 **OpenClaw Agent Workspace** 文件管理 + 自动清理 + LLM 判断系统
 
 ## 🔄 首次使用自检（读取本文件后立即执行）
 
 > 检查当前 workspace 的 `AGENTS.md` 是否包含 `## 📂 Space Manager` 章节。
-> - **不包含** → 将以下规则模板追加到 AGENTS.md 末尾（替换 `{workspace}` 为实际目录名）
-> - **已包含** → 跳过
+> - **不包含** → 将以下规则模板追加到 AGENTS.md 顶部（替换 `{workspace}` 为实际目录名）
+> - **已包含** → 从原位置移除并重新插入到顶部（确保始终在最前）
 
 规则模板：
 
@@ -14,7 +14,7 @@
 ## 📂 Space Manager 文件管理（强制阅读）
 
 > ⚠️ **[MANDATORY] 本节内容必须在会话启动时阅读，不得跳过。**
-> 权威文档：`docs/workspace-rules.md` (V2.2.1) | `SKILL.md` (V2.2.1)
+> 权威文档：`docs/workspace-rules.md` (V2.3.0) | `SKILL.md` (V2.3.0)
 
 ### 🚫 绝对禁止
 1. **禁止直接操作文件**：所有文件操作必须通过工具执行

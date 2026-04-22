@@ -131,19 +131,48 @@ class SpaceManager {
     const agentsPath = path.join(this.workspacePath, 'AGENTS.md');
     
     // 构建引用内容
-    const referenceSection = `## ⚠️ 最高优先级：文件写入规则（强制阅读）
+    const referenceSection = `## 📂 Space Manager 文件管理（强制阅读）
 
-在操作本 workspace 的任何文件前，**必须**阅读文件写入规则：
+> ⚠️ **[MANDATORY] 本节内容必须在会话启动时阅读，不得跳过。**
+> 权威文档：\`${rulesDocPath}\`
+>
+> **强制 Agent**：所有文件操作必须遵循规则模板，写入对应文件到对应文件夹。
 
-**强制文档**：\`${rulesDocPath}\`
+### 🚫 绝对禁止
+1. **禁止直接操作文件**：所有文件操作必须通过工具执行
+2. **禁止直接删除文件**：清理必须 move → /.trash/，禁止 rm
+3. **禁止绕过分类**：写文件前必须调用 classify_file 分类
+4. **禁止修改保护路径**：/core /system /.trash 为只读
 
-### 该文档包含
-1. **目录结构说明** - 每个目录的用途
-2. **文件分类规则** - 什么文件放哪里（优先级表）
-3. **操作流程** - 如何写入、清理文件
-4. **工具调用** - 分类和清理工具使用方法
+### 📋 操作流程
+**写入文件流程**：
+> \`classify_file(path, content)\` → 返回目标路径和类型
+> \`write_file(target_path, content, metadata)\` → 写入 + 更新索引
 
-**重要**：所有文件操作必须遵循上述规则。违反规则可能导致数据丢失或 workspace 损坏。
+**清理流程**：
+> \`scan_index()\` → 获取索引
+> \`cleanup_workspace()\` → 执行清理（不确定文件调用 llm_decide_file）
+
+### 🎯 文件分类规则
+**⚠️ 根目录核心文件豁免**：\`AGENTS.md\`、\`MEMORY.md\`、\`IDENTITY.md\`、\`USER.md\`、\`SOUL.md\`、\`TOOLS.md\`、\`HEARTBEAT.md\` 永远不移动
+
+### ⚡ 清理规则
+**强规则（直接移入 .trash）**：\`*.log\`、\`*.cache\`、\`*.tmp\`、\`*.temp\`、\`__pycache__/\`、\`node_modules/\`（workspace 根目录）
+
+**软规则（条件清理）**：importance=low 且 last_used > 7天 → .trash；未使用 > 90天 → .trash；0字节文件也必须移入 .trash/
+
+### 🔒 保护规则
+**永不触碰**：\`/core/\`、\`/.trash/\`、\`.git/\`、根目录核心文件
+
+**跳过清理**：last_used < 24小时；importance = high；owner = user
+
+### 📝 Task-Artifact 文件处理
+**处理流程**：
+> 1. 完成实质性工作 → 写入 task-summary_YYYY-MM-DD_HHMM.md
+> 2. 写完后 → 立即移入 .trash/（不堆积）
+> 3. memory/YYYY-MM-DD.md → 持久化记录
+
+**禁止行为**：❌ 写完 task 文件后留在根目录 | ❌ 不写 task 文件 | ❌ 在 cron isolated session 内写 task 文件
 
 ---
 
@@ -175,39 +204,56 @@ Don't ask permission. Just do it.`;
         fs.writeFileSync(agentsPath, defaultContent, 'utf8');
         console.log('[Init] Created AGENTS.md with rules reference');
       } else {
-        // 已有 AGENTS.md：检查是否已有引用
         const existingContent = fs.readFileSync(agentsPath, 'utf8');
         
-        if (existingContent.includes('最高优先级：文件写入规则')) {
-          console.log('[Init] AGENTS.md already has rules reference, skipping');
-          return;
-        }
-        
-        // 在标题后插入引用
-        const lines = existingContent.split('\n');
-        let newContent = '';
-        
-        // 找到标题行（以 # 开头）
-        let titleIndex = -1;
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].trim().startsWith('# ')) {
-            titleIndex = i;
-            break;
+        // 已有 AGENTS.md：检查是否已有引用，已有时从原位置移除
+        if (existingContent.includes('## 📂 Space Manager 文件管理')) {
+          // 已有引用：从原位置移除该章节，准备重新插入到顶部
+          const sectionStart = existingContent.indexOf('## 📂 Space Manager 文件管理');
+          const beforeSection = existingContent.substring(0, sectionStart).trimEnd();
+          const afterStart = existingContent.indexOf('\n## ', sectionStart + 2);
+          const afterSection = afterStart >= 0 ? existingContent.substring(afterStart) : '';
+          const contentWithoutSection = beforeSection + afterSection;
+          // 重新拼接：保留标题 + 规则章节 + 剩余内容
+          const lines = contentWithoutSection.split('\n');
+          let newContent = '';
+          let titleIndex = -1;
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith('# ')) {
+              titleIndex = i;
+              break;
+            }
           }
-        }
-        
-        if (titleIndex >= 0) {
-          // 在标题行后插入
-          const before = lines.slice(0, titleIndex + 1);
-          const after = lines.slice(titleIndex + 1);
-          newContent = before.join('\n') + '\n\n' + referenceSection + after.join('\n');
+          if (titleIndex >= 0) {
+            const before = lines.slice(0, titleIndex + 1);
+            const after = lines.slice(titleIndex + 1);
+            newContent = before.join('\n') + '\n\n' + referenceSection + after.join('\n');
+          } else {
+            newContent = referenceSection + contentWithoutSection;
+          }
+          fs.writeFileSync(agentsPath, newContent, 'utf8');
+          console.log('[Init] AGENTS.md rules reference moved to top');
         } else {
-          // 没有标题，直接添加到开头
-          newContent = referenceSection + existingContent;
+          // 没有引用：在标题后插入引用
+          const lines = existingContent.split('\n');
+          let newContent = '';
+          let titleIndex = -1;
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith('# ')) {
+              titleIndex = i;
+              break;
+            }
+          }
+          if (titleIndex >= 0) {
+            const before = lines.slice(0, titleIndex + 1);
+            const after = lines.slice(titleIndex + 1);
+            newContent = before.join('\n') + '\n\n' + referenceSection + after.join('\n');
+          } else {
+            newContent = referenceSection + existingContent;
+          }
+          fs.writeFileSync(agentsPath, newContent, 'utf8');
+          console.log('[Init] Updated AGENTS.md with rules reference');
         }
-        
-        fs.writeFileSync(agentsPath, newContent, 'utf8');
-        console.log('[Init] Updated AGENTS.md with rules reference');
       }
     } catch (error) {
       console.error('[Init] Failed to update AGENTS.md:', error.message);
