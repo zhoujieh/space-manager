@@ -2,7 +2,7 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
-## [2.3.0] - 2026-04-22
+## [2.2.2] - 2026-04-22
 
 ### 功能更新
 
@@ -11,7 +11,9 @@ All notable changes to the Space Manager skill will be documented in this file.
 **完整规则内容嵌入 main.js**：referenceSection 替换为完整规则模板，不再依赖 SKILL.md 模板追加
 
 **模板增加强制说明**：强制 Agent 按规则写入对应文件到对应文件夹
-## [2.2.1] - 2026-04-22
+## [2.2.1]
+
+### [reverted] V2.3.0 因版本号跳度过大，撤销并改为 V2.2.2 - 2026-04-22
 
 ### Bug Fixes
 
