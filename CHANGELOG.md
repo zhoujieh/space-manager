@@ -2,6 +2,18 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.1.9] - 2026-04-22
+
+### Documentation Fixes
+
+**模板格式修复**
+- **问题** - SKILL.md 中的规则模板使用了 ```markdown 包裹，导致 AGENTS.md 追加后显示异常
+- **修复** - 改用 ``` 包裹模板内容
+
+**软规则矛盾修复**
+- **问题** - SKILL.md 模板中「0字节文件>7天→直接删除」与安全规则（禁止 rm）矛盾
+- **修复** - 改为「0字节文件也必须移入 .trash/，禁止直接删除」
+
 ## [2.1.8] - 2026-04-22
 
 ### Bug Fixes

@@ -1,4 +1,4 @@
-# Space Manager V2.1.7
+# Space Manager V2.1.9
 
 **OpenClaw Agent Workspace** 文件管理 + 自动清理 + LLM 判断系统
 
@@ -9,11 +9,12 @@
 > - **已包含** → 跳过
 
 规则模板：
-```markdown
-## 📁 Space Manager 文件管理（强制阅读）
+
+```
+## 📂 Space Manager 文件管理（强制阅读）
 
 > ⚠️ **[MANDATORY] 本节内容必须在会话启动时阅读，不得跳过。**
-> 权威文档：`docs/workspace-rules.md` (V2.1.7) | `SKILL.md` (V2.1.7)
+> 权威文档：`docs/workspace-rules.md` (V2.1.9) | `SKILL.md` (V2.1.9)
 
 ### 🚫 绝对禁止
 1. **禁止直接操作文件**：所有文件操作必须通过工具执行
@@ -63,7 +64,7 @@
 **软规则（条件清理）**：
 - importance=low 且 last_used > 7天 → .trash
 - 未使用 > 90天 → .trash
-- 0字节文件 > 7天 → 直接删除
+- 0字节文件也必须移入 .trash/，禁止直接删除
 
 ### 🔒 保护规则
 **永不触碰**：
@@ -572,8 +573,8 @@ node runtime/main.js /path/to/workspace cleanup --force
 
 ```json
 {
-  "version": "2.1.7",
-  "last_updated": "2026-04-21T10:30:00Z",
+  "version": "2.1.8",
+  "last_updated": "2026-04-22T08:45:00Z",
   "files": [
     {
       "path": "/workspace/docs/readme.md",
