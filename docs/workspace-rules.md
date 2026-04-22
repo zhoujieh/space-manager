@@ -119,7 +119,7 @@ print(f"Target path: {result['target_path']}")
 
 ---
 
-**版本**：V2.2.0 (模板修复)
+**版本**：V2.2.1 (模板修复)
 **最后更新**：2026-04-22
 **对应分类器版本**:classifier.js (priority-based rules)
 **修复内容**:init 后索引为空导致误清理问题

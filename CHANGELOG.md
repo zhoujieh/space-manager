@@ -2,6 +2,12 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.2.1] - 2026-04-22
+
+### Bug Fixes
+
+移除 *.traineddata 强规则，交给 LLM 判断（OCR语言包误清理问题）
+
 ## [2.2.0] - 2026-04-22
 
 ### Bug Fixes
