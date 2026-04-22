@@ -2,6 +2,20 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.2.0] - 2026-04-22
+
+### Bug Fixes
+
+本次修复解决模板追加到 AGENTS.md 后显示异常的问题。
+
+#### 模板格式修复
+
+**代码块语言标签**：SKILL.md 模板外层从 ``` 改为 ```template，避免渲染时与内层冲突
+
+**嵌套代码块替换**：操作流程和处理流程中的嵌套 ``` 改为 `>` 行内格式，彻底消除显示异常
+
+**版本同步**：skill.json / SKILL.md / README / CHANGELOG / _meta.json / workspace-rules.md
+
 ## [2.1.9] - 2026-04-22
 
 ### Documentation Fixes

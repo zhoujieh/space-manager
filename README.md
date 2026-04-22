@@ -25,7 +25,7 @@ node runtime/main.js /path/to/workspace classify /temp/test.log
 ```
 
 ## 📦 版本
-### V2.1.9 - 模板修复 (2026-04-22)
+### V2.2.0 - 模板修复 (2026-04-22)
 
 #### Documentation Fixes
 

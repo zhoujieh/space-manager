@@ -1,4 +1,4 @@
-# Space Manager V2.1.9
+# Space Manager V2.2.0
 
 **OpenClaw Agent Workspace** 文件管理 + 自动清理 + LLM 判断系统
 
@@ -10,11 +10,11 @@
 
 规则模板：
 
-```
+```template
 ## 📂 Space Manager 文件管理（强制阅读）
 
 > ⚠️ **[MANDATORY] 本节内容必须在会话启动时阅读，不得跳过。**
-> 权威文档：`docs/workspace-rules.md` (V2.1.9) | `SKILL.md` (V2.1.9)
+> 权威文档：`docs/workspace-rules.md` (V2.2.0) | `SKILL.md` (V2.2.0)
 
 ### 🚫 绝对禁止
 1. **禁止直接操作文件**：所有文件操作必须通过工具执行
@@ -24,16 +24,12 @@
 
 ### 📋 操作流程
 **写入文件流程**：
-```
-1. classify_file(path, content) → 返回目标路径和类型
-2. write_file(target_path, content, metadata) → 写入 + 更新索引
-```
+> `classify_file(path, content)` → 返回目标路径和类型
+> `write_file(target_path, content, metadata)` → 写入 + 更新索引
 
 **清理流程**：
-```
-1. scan_index() → 获取索引
-2. cleanup_workspace() → 执行清理（不确定文件调用 llm_decide_file）
-```
+> `scan_index()` → 获取索引
+> `cleanup_workspace()` → 执行清理（不确定文件调用 llm_decide_file）
 
 ### 🎯 文件分类规则
 **⚠️ 根目录核心文件豁免**：
@@ -80,11 +76,9 @@
 **系统强制要求**：每次实质性工作后必须写入 `task-*.md` 文件。
 
 **处理流程**：
-```
-1. 完成实质性工作 → 写入 task-summary_YYYY-MM-DD_HHMM.md
-2. 写完后 → 立即移入 .trash/（不堆积）
-3. memory/YYYY-MM-DD.md → 持久化记录（不需要 task 文件）
-```
+> 1. 完成实质性工作 → 写入 task-summary_YYYY-MM-DD_HHMM.md
+> 2. 写完后 → 立即移入 .trash/（不堆积）
+> 3. memory/YYYY-MM-DD.md → 持久化记录（不需要 task 文件）
 
 **为什么可以立即移入 .trash/**：
 - task 文件与 memory 日志功能重复
