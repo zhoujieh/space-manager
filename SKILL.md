@@ -1,4 +1,4 @@
-# Space Manager V2.2.2
+# Space Manager
 
 **OpenClaw Agent Workspace** 文件管理 + 自动清理 + LLM 判断系统
 
@@ -14,7 +14,7 @@
 ## 📂 Space Manager 文件管理（强制阅读）
 
 > ⚠️ **[MANDATORY] 本节内容必须在会话启动时阅读，不得跳过。**
-> 权威文档：`docs/workspace-rules.md` (V2.2.2) | `SKILL.md` (V2.2.2)
+> 权威文档：`docs/workspace-rules.md`  | `SKILL.md` 
 
 ### 🚫 绝对禁止
 1. **禁止直接操作文件**：所有文件操作必须通过工具执行

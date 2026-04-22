@@ -2,6 +2,11 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.2.3] - 2026-04-22
+
+### 清理更新
+
+**移除版本号**：SKILL.md 标题去除版本号，模板内所有版本引用移除；README.md 移除版本相关内容；workspace-rules.md 移除末尾元信息
 ## [2.2.2] - 2026-04-22
 
 ### 功能更新
