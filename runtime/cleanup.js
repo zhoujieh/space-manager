@@ -399,13 +399,19 @@ class Cleanup {
    * 检查metadata是否可信（V2.1增强信任机制）
    */
   isMetadataTrusted(file) {
-    // 可信来源优先级：
-    // 1. 系统索引生成（source: 'index'）
-    // 2. 系统hook/技能工具创建（source: 'system'）
-    // 3. 包含完整系统字段且逻辑一致
-    // 4. 来自保护路径的文件
+    // 可信来源优先级（V2.1.8更新）：
+    // 1. 系统扫描发现（source: 'scan'）— rebuild()扫描，verified=true
+    // 2. 系统索引生成（source: 'index'）— 旧版本兼容
+    // 3. 系统hook/技能工具创建（source: 'system'）
+    // 4. 包含完整系统字段且逻辑一致
+    // 5. 来自保护路径的文件
     
-    // 1. 系统索引生成
+    // 1. 系统扫描发现（V2.1.8新增）
+    if (file.source && file.source === 'scan' && file.verified) {
+      return true;
+    }
+    
+    // 2. 系统索引生成（旧版本兼容）
     if (file.source && file.source === 'index') {
       return true;
     }

@@ -168,18 +168,22 @@ class Index {
         const relativePath = path.join(basePath, item.name);
 
         if (item.isDirectory()) {
-          // 跳过隐藏目录和特殊目录
-          if (!item.name.startsWith('.') && item.name !== 'node_modules') {
+          // 跳过隐藏目录和特殊目录（V2.1.8: 添加system目录）
+          const excludeDirs = ['.trash', '.git', 'node_modules', '__pycache__', 'system'];
+          if (!item.name.startsWith('.') && !excludeDirs.includes(item.name)) {
             scanDir(fullPath, relativePath);
           }
-        } else if (item.isFile()) {
+        } else if (item.isFile() || item.isSymbolicLink()) {
           const stats = fs.statSync(fullPath);
+          const isSymlink = item.isSymbolicLink();
           files.push({
             path: '/' + relativePath,
             type: this.detectType(item.name),
             importance: 'high',
-            source: 'index',
+            source: 'scan', // V2.1.8: 标记为扫描发现，语义更明确
             owner: 'agent',
+            verified: true, // V2.1.8: 标记已验证
+            is_symlink: isSymlink, // V2.1.8: 标记符号链接
             created_at: stats.birthtime.toISOString(),
             last_used_at: stats.mtime.toISOString(),
             size: stats.size
@@ -273,7 +277,13 @@ class Index {
     // 排除目录：.trash, .git, node_modules, __pycache__, 以及隐藏目录
     const excludeDirs = [
       '.trash', '.git', 'node_modules', '__pycache__', 
-      '.DS_Store', 'Thumbs.db', '.openclaw', '.qclaw'
+      '.DS_Store', 'Thumbs.db', '.openclaw', '.qclaw', 'system'
+    ];
+    
+    // 排除文件：workspace核心文件（永不移动，不需要索引）
+    const excludeFiles = [
+      'AGENTS.md', 'MEMORY.md', 'IDENTITY.md', 'USER.md', 'SOUL.md', 
+      'TOOLS.md', 'HEARTBEAT.md', 'BOOTSTRAP.md', '.gitignore'
     ];
     
     // 已访问路径集合（防止符号链接循环）
@@ -293,7 +303,16 @@ class Index {
         try {
           const lstat = fs.lstatSync(currentPath);
           if (lstat.isSymbolicLink()) {
-            return; // 跳过符号链接
+            // V2.1.8修复: 记录符号链接而不是跳过
+            const targetPath = fs.realpathSync(currentPath);
+            const targetStats = fs.statSync(targetPath);
+            result.push({
+              path: '/' + (relativeBase || ''),
+              size: targetStats.size,
+              is_symlink: true,
+              target: targetPath
+            });
+            return;
           }
         } catch (e) {
           return; // 无法获取状态，跳过
@@ -326,8 +345,35 @@ class Index {
           continue; // 跳过无法访问的文件
         }
         
-        // 跳过符号链接（如果不跟随）
+        // 处理符号链接：记录而不是跳过（V2.1.8修复）
         if (!followSymlinks && stat.isSymbolicLink()) {
+          scannedCount++;
+          // 记录符号链接
+          try {
+            const targetPath = fs.realpathSync(fullPath);
+            const targetStats = fs.statSync(targetPath);
+            result.push({
+              path: '/' + relativePath,
+              size: targetStats.size,
+              mtime: stat.mtime.toISOString(),
+              is_symlink: true,
+              target: targetPath
+            });
+          } catch (e) {
+            // 符号链接目标无法访问，记录为孤立链接
+            result.push({
+              path: '/' + relativePath,
+              size: 0,
+              mtime: stat.mtime.toISOString(),
+              is_symlink: true,
+              orphan: true
+            });
+          }
+          continue;
+        }
+        
+        // 跳过排除文件（核心文件永不移动）
+        if (excludeFiles.includes(item)) {
           continue;
         }
         

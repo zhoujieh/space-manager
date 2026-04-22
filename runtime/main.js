@@ -28,7 +28,7 @@ class SpaceManager {
             lowImportanceDays: skillJson.config.low_importance_days || 7,
             unusedDays: skillJson.config.unused_days || 90,
             llmDecisionThreshold: skillJson.config.llm_decision_threshold || 0.7,
-            maxIndexScanFiles: skillJson.config.max_index_scan_files || 10000
+            max_index_scan_files: skillJson.config.max_index_scan_files || 10000 // V2.1.8: 保持snake_case
           };
         }
         // 合并 protected_paths
@@ -47,7 +47,7 @@ class SpaceManager {
       lowImportanceDays: 7,
       unusedDays: 90,
       llmDecisionThreshold: 0.7,
-      maxIndexScanFiles: 10000,
+      max_index_scan_files: 10000, // V2.1.8: 使用snake_case保持与skill.json一致
       ...skillConfig,
       ...config
     };
@@ -451,8 +451,10 @@ Don't ask permission. Just do it.`;
       // 更新索引
       try {
         const stats = fs.statSync(targetFullPath);
+        // 确保路径格式一致：索引中使用/开头的路径
+        const indexPath = '/' + normalizedPath;
         await this.index.addOrUpdate({
-          path: normalizedPath,
+          path: indexPath,
           size: stats.size,
           type: 'file',
           source: 'restore',

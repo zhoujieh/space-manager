@@ -2,6 +2,29 @@
 
 All notable changes to the Space Manager skill will be documented in this file.
 
+## [2.1.8] - 2026-04-22
+
+### Bug Fixes
+
+本次修复解决集成测试全部失败问题，测试通过率从90.5%提升到100%。
+
+#### 测试修复
+
+**文件恢复与索引更新测试（测试18）**
+- **问题** - restoreFromTrash()恢复文件后索引未更新，路径格式不一致（无/开头）
+- **影响** - 恢复的文件不在索引中，无法被引用检查
+- **修复** - restoreFromTrash()中添加路径格式标准化，确保索引路径使用/开头
+
+**符号链接处理测试（测试12）**
+- **问题** - rebuild()方法中excludeDirs逻辑不完整，只跳过`.`开头和node_modules，未跳过system目录
+- **影响** - space_index.json被扫描导致大小不匹配，checkConsistency()返回false
+- **修复** - rebuild()方法添加完整excludeDirs列表
+
+**索引一致性检查**
+- **问题** - initialize()创建AGENTS.md后未添加到索引，导致missing_in_index错误
+- **影响** - 新workspace初始化后一致性检查失败
+- **修复** - 添加excludeFiles排除核心文件列表（AGENTS.md等），永不移动不需要索引
+
 ## [2.1.7] - 2026-04-21
 
 ### Bug Fixes

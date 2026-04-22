@@ -314,17 +314,14 @@ async function runTests() {
   runner.test('增强引用检查 - ES6动态导入', async () => {
     const tempDir = createTempWorkspace();
     try {
-      const manager = new SpaceManager(tempDir);
-      await manager.initialize();
-
-      // 创建测试文件
+      // V2.1.8修复: 先创建文件，再初始化
       const srcDir = path.join(tempDir, 'src');
       fs.mkdirSync(srcDir, { recursive: true });
       fs.writeFileSync(path.join(srcDir, 'main.js'), 'const module = await import("./utils.js");');
       fs.writeFileSync(path.join(srcDir, 'utils.js'), 'export default {};');
 
-      // 扫描索引
-      await manager.scanIndex();
+      const manager = new SpaceManager(tempDir);
+      await manager.initialize();
 
       // 检查引用
       const cleanup = manager.cleanup;
@@ -339,16 +336,17 @@ async function runTests() {
   runner.test('增强引用检查 - Python导入', async () => {
     const tempDir = createTempWorkspace();
     try {
+      // V2.1.8修复: 先创建文件，再初始化
+      fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'src/main.py'), 'from utils import helper');
+      fs.writeFileSync(path.join(tempDir, 'src/utils.py'), 'def helper(): pass');
+
       const manager = new SpaceManager(tempDir);
       await manager.initialize();
 
-      // 创建Python文件
-      fs.writeFileSync(path.join(tempDir, 'main.py'), 'from utils import helper\nimport os');
-      fs.writeFileSync(path.join(tempDir, 'utils.py'), 'def helper(): pass');
-
-      await manager.scanIndex();
+      // 检查引用
       const cleanup = manager.cleanup;
-      const referenced = cleanup.isFileReferenced('/utils.py');
+      const referenced = cleanup.isFileReferenced('/src/utils.py');
       runner.assert(referenced, 'utils.py 应被Python导入引用');
     } finally {
       cleanupTempWorkspace(tempDir);
@@ -359,16 +357,16 @@ async function runTests() {
   runner.test('增强引用检查 - 多行导入', async () => {
     const tempDir = createTempWorkspace();
     try {
-      const manager = new SpaceManager(tempDir);
-      await manager.initialize();
-
+      // V2.1.8修复: 先创建文件，再初始化
       fs.writeFileSync(path.join(tempDir, 'main.js'), `import {
   Component,
   useState
 } from './react.js';`);
       fs.writeFileSync(path.join(tempDir, 'react.js'), 'export const Component = {};');
 
-      await manager.scanIndex();
+      const manager = new SpaceManager(tempDir);
+      await manager.initialize();
+
       const cleanup = manager.cleanup;
       const referenced = cleanup.isFileReferenced('/react.js');
       runner.assert(referenced, 'react.js 应被多行导入引用');
@@ -381,15 +379,12 @@ async function runTests() {
   runner.test('索引一致性检查 - 符号链接处理', async () => {
     const tempDir = createTempWorkspace();
     try {
-      const manager = new SpaceManager(tempDir);
-      await manager.initialize();
-
-      // 创建文件和符号链接
+      // V2.1.8修复: 先创建文件和符号链接，再初始化
       fs.writeFileSync(path.join(tempDir, 'real.txt'), 'content');
       fs.symlinkSync(path.join(tempDir, 'real.txt'), path.join(tempDir, 'link.txt'));
 
-      // 扫描索引
-      await manager.scanIndex();
+      const manager = new SpaceManager(tempDir);
+      await manager.initialize();
 
       // 检查一致性
       const result = await manager.index.checkConsistency();
@@ -488,14 +483,14 @@ async function runTests() {
   runner.test('清理批处理集成 - 真实清理场景', async () => {
     const tempDir = createTempWorkspace();
     try {
-      const manager = new SpaceManager(tempDir);
-      await manager.initialize();
-
-      // 创建需要LLM判断的文件
+      // V2.1.8修复: 先创建文件，再初始化
       for (let i = 0; i < 15; i++) {
         const filePath = path.join(tempDir, `unknown${i}.dat`);
         fs.writeFileSync(filePath, `ambiguous content ${i}`);
       }
+
+      const manager = new SpaceManager(tempDir);
+      await manager.initialize();
 
       // 执行清理（启用LLM）
       const result = await manager.cleanup.run({
@@ -535,14 +530,14 @@ async function runTests() {
   runner.test('文件恢复与索引更新集成', async () => {
     const tempDir = createTempWorkspace();
     try {
-      const manager = new SpaceManager(tempDir);
-      await manager.initialize();
-
-      // 创建文件并移动到回收站
+      // V2.1.8修复: 先创建文件，再初始化
       const originalPath = '/docs/test.md';
       const fullPath = path.join(tempDir, 'docs', 'test.md');
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, '# Test');
+
+      const manager = new SpaceManager(tempDir);
+      await manager.initialize();
 
       const moveResult = await manager.moveToTrash(originalPath, '测试');
       runner.assert(moveResult.success, '移动应成功');
